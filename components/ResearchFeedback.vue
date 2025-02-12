@@ -75,8 +75,7 @@
     <template #header>
       <h2 class="font-bold">2. Model Feedback</h2>
       <p class="text-sm text-gray-500">
-        The AI will ask you some follow up questions to help you clarify the
-        research direction.
+        The AI will ask follow-up questions to help clarify and refine your research direction.
       </p>
     </template>
 

@@ -18,11 +18,11 @@
           <ULink target="_blank" href="https://github.com/dzhng/deep-research">
             dzhng/deep-research
           </ULink>
-          . It features streaming AI responses for realtime feedback, and
-          viasualization of the research process using a tree structure.
+          . It features streaming AI responses for real-time feedback and
+          visualization of the research process using a tree structure.
           <br />
-          All API requests are directly sent from your browser. No remote data
-          stored.
+          All API requests are sent directly from your browser. No data is stored
+          remotely.
         </div>
 
         <ResearchForm
