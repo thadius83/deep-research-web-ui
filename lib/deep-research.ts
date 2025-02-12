@@ -128,7 +128,7 @@ export const searchResultTypeSchema = z.object({
 function processSearchResult({
   query,
   result,
-  numLearnings = 3,
+  numLearnings = 5,
   numFollowUpQuestions = 3,
 }: {
   query: string

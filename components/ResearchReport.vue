@@ -115,7 +115,7 @@
     <div
       v-if="reportContent"
       id="report-content"
-      class="prose prose-sm max-w-none p-6 bg-gray-50 dark:bg-gray-800 dark:text-white rounded-lg shadow"
+      class="prose prose-lg max-w-none dark:prose-invert p-6 bg-gray-50 dark:bg-gray-800 rounded-lg shadow"
       v-html="reportHtml"
     />
     <template v-else>

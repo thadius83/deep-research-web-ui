@@ -21,14 +21,40 @@
     numQuestions: 3,
   })
 
-  const isSubmitButtonDisabled = computed(
-    () => !form.query || !form.breadth || !form.depth || !form.numQuestions,
+  const store = useConfigStore()
+
+  const configManager = inject<{ show: () => void }>('configManager')
+
+  // Updated key checks: return a valid key if it is a nonempty string
+  const hasAiKey = computed(() => {
+    const key = store.getActualApiKey('ai')
+    return typeof key === 'string' && key.length > 0
+  })
+  const hasWebSearchKey = computed(() => {
+    const key = store.getActualApiKey('webSearch')
+    return typeof key === 'string' && key.length > 0
+  })
+  const hasConfig = computed(() => hasAiKey.value && hasWebSearchKey.value)
+
+  // Check that all form fields are set
+  const hasFormValues = computed(() =>
+    form.query && form.breadth && form.depth && form.numQuestions
   )
 
-  function handleSubmit() {
-    emit('submit', {
-      ...form,
+  const isSubmitButtonDisabled = computed(
+    () => !hasFormValues.value || !hasConfig.value
+  )
+
+  watch([hasAiKey, hasWebSearchKey, hasFormValues], () => {
+    console.log('Form state:', {
+      hasFormValues: hasFormValues.value,
+      hasAiKey: hasAiKey.value,
+      hasWebSearchKey: hasWebSearchKey.value
     })
+  }, { immediate: true })
+
+  function handleSubmit() {
+    emit('submit', { ...form })
   }
 
   defineExpose({
@@ -92,16 +118,29 @@
     </div>
 
     <template #footer>
-      <UButton
-        type="submit"
-        color="primary"
-        :loading="isLoadingFeedback"
-        :disabled="isSubmitButtonDisabled"
-        block
-        @click="handleSubmit"
-      >
-        {{ isLoadingFeedback ? 'Researching...' : 'Start Research' }}
-      </UButton>
+      <div class="space-y-2">
+        <div v-if="!hasConfig" class="text-sm text-red-500 text-center">
+          Please configure API keys in
+          <UButton
+            variant="link"
+            class="!p-0"
+            @click="configManager?.show()"
+          >
+            settings
+          </UButton>
+          before starting research.
+        </div>
+        <UButton
+          type="submit"
+          color="primary"
+          :loading="isLoadingFeedback"
+          :disabled="isSubmitButtonDisabled"
+          block
+          @click="handleSubmit"
+        >
+          {{ isLoadingFeedback ? 'Researching...' : 'Start Research' }}
+        </UButton>
+      </div>
     </template>
   </UCard>
 </template>
