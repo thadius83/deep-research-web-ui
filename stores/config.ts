@@ -24,12 +24,13 @@ export const useConfigStore = defineStore('config', () => {
   const config = useLocalStorage<Config>('deep-research-config', {
     ai: {
       provider: 'openai-compatible',
-      model: '',
+      model: 'gpt-4o',
+      apiBase: 'https://api.openai.com/v1',
       contextSize: 128_000,
     },
     webSearch: {
-      provider: 'tavily',
-      apiBase: '',
+      provider: 'firecrawl',
+      apiBase: 'https://api.firecrawl.dev/v1',
     },
   })
 
