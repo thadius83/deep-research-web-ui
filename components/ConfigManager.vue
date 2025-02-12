@@ -42,6 +42,9 @@
               />
             </UFormField>
             <UFormField label="API Base URL">
+              <template #help>
+                Default endpoint for OpenAI API
+              </template>
               <UInput
                 v-model="config.ai.apiBase"
                 class="w-full"
@@ -49,10 +52,13 @@
               />
             </UFormField>
             <UFormField label="Model" required>
+              <template #help>
+                Default model is gpt-4o
+              </template>
               <UInput
                 v-model="config.ai.model"
                 class="w-full"
-                placeholder="Model name"
+                placeholder="gpt-4o"
               />
             </UFormField>
           </div>
@@ -63,30 +69,75 @@
           <h3 class="font-bold">Web Search Provider</h3>
           <UFormField label="Provider">
             <template #help>
-              Tavily is similar to Firecrawl, but with more free quota (1000
-              credits / month). Get one API key at
+              Firecrawl provides advanced web search and content extraction. Get your API key at
               <UButton
                 class="!p-0"
-                to="https://app.tavily.com/home"
+                to="https://firecrawl.dev"
                 target="_blank"
                 variant="link"
               >
-                app.tavily.com
+                firecrawl.dev
               </UButton>
-              .
+              . Tavily is available as an alternative option.
             </template>
             <USelect
               v-model="config.webSearch.provider"
-              :items="[{ label: 'Tavily', value: 'tavily' }]"
+              :items="[
+                { label: 'Firecrawl', value: 'firecrawl' },
+                { label: 'Tavily', value: 'tavily' }
+              ]"
             />
           </UFormField>
-          <UFormField label="API Key" required>
-            <PasswordInput
-              v-model="config.webSearch.apiKey"
-              class="w-full"
-              placeholder="API Key"
-            />
-          </UFormField>
+          <template v-if="config.webSearch.provider === 'tavily'">
+            <UFormField label="API Key" required>
+              <template #help>
+                Get your API key at
+                <UButton
+                  class="!p-0"
+                  to="https://app.tavily.com/home"
+                  target="_blank"
+                  variant="link"
+                >
+                  app.tavily.com
+                </UButton>
+              </template>
+              <PasswordInput
+                v-model="config.webSearch.apiKey"
+                class="w-full"
+                placeholder="API Key"
+              />
+            </UFormField>
+          </template>
+          <template v-else-if="config.webSearch.provider === 'firecrawl'">
+            <UFormField label="API Key" required>
+              <template #help>
+                Get your API key at
+                <UButton
+                  class="!p-0"
+                  to="https://firecrawl.dev"
+                  target="_blank"
+                  variant="link"
+                >
+                  firecrawl.dev
+                </UButton>
+              </template>
+              <PasswordInput
+                v-model="config.webSearch.apiKey"
+                class="w-full"
+                placeholder="API Key"
+              />
+            </UFormField>
+            <UFormField label="API Base URL">
+              <template #help>
+                Default Firecrawl API endpoint
+              </template>
+              <UInput
+                v-model="config.webSearch.apiBase"
+                class="w-full"
+                placeholder="https://api.firecrawl.dev/v1"
+              />
+            </UFormField>
+          </template>
         </div>
       </template>
       <template #footer>

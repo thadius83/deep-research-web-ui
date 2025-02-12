@@ -26,4 +26,9 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
   compatibilityDate: '2024-11-01',
   devtools: { enabled: true },
+  
+  // Development server configuration
+  devServer: {
+    host: '0.0.0.0',
+  },
 })

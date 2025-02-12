@@ -54,7 +54,7 @@
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <UFormField label="Number of Questions" required>
-          <template #help> Number of questions for you to clarify. </template>
+          <template #help> Number of clarifying questions to refine the research scope. </template>
           <UInput
             v-model="form.numQuestions"
             class="w-full"
@@ -66,7 +66,7 @@
         </UFormField>
 
         <UFormField label="Depth" required>
-          <template #help> How deep you want to dig. </template>
+          <template #help> Determines how many levels deep the research will explore. </template>
           <UInput
             v-model="form.depth"
             class="w-full"
@@ -78,7 +78,7 @@
         </UFormField>
 
         <UFormField label="Breadth" required>
-          <template #help> Number of searches in each depth. </template>
+          <template #help> Number of parallel research paths at each depth level. </template>
           <UInput
             v-model="form.breadth"
             class="w-full"
