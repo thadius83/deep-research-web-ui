@@ -8,8 +8,8 @@
           </h1>
           <div class="mx-auto sm:ml-auto sm:mr-0 flex items-center gap-2">
             <GitHubButton />
-            <ConfigManager ref="configManagerRef" />
             <ColorModeButton />
+            <ConfigManager />
           </div>
         </div>
 
@@ -47,15 +47,14 @@
   import type ResearchFeedback from '~/components/ResearchFeedback.vue'
   import type DeepResearch from '~/components/DeepResearch.vue'
   import type ResearchReport from '~/components/ResearchReport.vue'
-  import type ConfigManager from '~/components/ConfigManager.vue'
   import type { ResearchInputData } from '~/components/ResearchForm.vue'
   import type { ResearchFeedbackResult } from '~/components/ResearchFeedback.vue'
   import type { ResearchResult } from '~/lib/deep-research'
+  import ConfigManager from '~/components/ConfigManager.vue'
 
   const config = useConfigStore()
   const toast = useToast()
 
-  const configManagerRef = ref<InstanceType<typeof ConfigManager>>()
   const formRef = ref<InstanceType<typeof ResearchForm>>()
   const feedbackRef = ref<InstanceType<typeof ResearchFeedback>>()
   const deepResearchRef = ref<InstanceType<typeof DeepResearch>>()
@@ -74,18 +73,6 @@ ${feedback.value
   }
 
   async function generateFeedback(data: ResearchInputData) {
-    const aiConfig = config.config.ai
-    const webSearchConfig = config.config.webSearch
-
-    if (!aiConfig.model || !aiConfig.apiKey || !webSearchConfig.apiKey) {
-      toast.add({
-        title: 'Config not set',
-        description: 'Please configure AI and Web Search settings.',
-        color: 'error',
-      })
-      configManagerRef.value?.show()
-      return
-    }
     feedbackRef.value?.getFeedback(data.query, data.numQuestions)
   }
 

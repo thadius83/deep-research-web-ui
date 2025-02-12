@@ -128,7 +128,7 @@ export const searchResultTypeSchema = z.object({
 function processSearchResult({
   query,
   result,
-  numLearnings = 3,
+  numLearnings = 5,
   numFollowUpQuestions = 3,
 }: {
   query: string
@@ -179,7 +179,7 @@ export function writeFinalReport({
     150_000,
   )
   const _prompt = [
-    `Given the following prompt from the user, write a final report on the topic using the learnings from research. Make it as as detailed as possible, aim for 3 or more pages, include ALL the learnings from research:`,
+    `Given the following prompt from the user, write a final report on the topic using the learnings from research. Make it as as detailed as possible, aim for 6 or more pages, include ALL the learnings from research:`,
     `<prompt>${prompt}</prompt>`,
     `Here are all the learnings from previous research:`,
     `<learnings>\n${learningsString}\n</learnings>`,
