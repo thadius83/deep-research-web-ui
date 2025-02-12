@@ -77,16 +77,62 @@
             </template>
             <USelect
               v-model="config.webSearch.provider"
-              :items="[{ label: 'Tavily', value: 'tavily' }]"
+              :items="[
+                { label: 'Tavily', value: 'tavily' },
+                { label: 'Firecrawl', value: 'firecrawl' }
+              ]"
             />
           </UFormField>
-          <UFormField label="API Key" required>
-            <PasswordInput
-              v-model="config.webSearch.apiKey"
-              class="w-full"
-              placeholder="API Key"
-            />
-          </UFormField>
+          <template v-if="config.webSearch.provider === 'tavily'">
+            <UFormField label="API Key" required>
+              <template #help>
+                Get your API key at
+                <UButton
+                  class="!p-0"
+                  to="https://app.tavily.com/home"
+                  target="_blank"
+                  variant="link"
+                >
+                  app.tavily.com
+                </UButton>
+              </template>
+              <PasswordInput
+                v-model="config.webSearch.apiKey"
+                class="w-full"
+                placeholder="API Key"
+              />
+            </UFormField>
+          </template>
+          <template v-else-if="config.webSearch.provider === 'firecrawl'">
+            <UFormField label="API Key" required>
+              <template #help>
+                Get your API key at
+                <UButton
+                  class="!p-0"
+                  to="https://firecrawl.co"
+                  target="_blank"
+                  variant="link"
+                >
+                  firecrawl.co
+                </UButton>
+              </template>
+              <PasswordInput
+                v-model="config.webSearch.apiKey"
+                class="w-full"
+                placeholder="API Key"
+              />
+            </UFormField>
+            <UFormField label="API Base URL">
+              <template #help>
+                Optional: Override the default Firecrawl API endpoint
+              </template>
+              <UInput
+                v-model="config.webSearch.apiBase"
+                class="w-full"
+                placeholder="https://api.firecrawl.co"
+              />
+            </UFormField>
+          </template>
         </div>
       </template>
       <template #footer>

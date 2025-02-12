@@ -1,4 +1,5 @@
-import { skipHydrate } from 'pinia'
+import { defineStore, skipHydrate } from 'pinia'
+import { useLocalStorage } from '@vueuse/core'
 
 export type ConfigAiProvider = 'openai-compatible'
 export interface ConfigAi {
@@ -9,8 +10,9 @@ export interface ConfigAi {
   contextSize?: number
 }
 export interface ConfigWebSearch {
-  provider: 'tavily'
+  provider: 'tavily' | 'firecrawl'
   apiKey?: string
+  apiBase?: string
 }
 
 export interface Config {
@@ -27,6 +29,7 @@ export const useConfigStore = defineStore('config', () => {
     },
     webSearch: {
       provider: 'tavily',
+      apiBase: '',
     },
   })
 

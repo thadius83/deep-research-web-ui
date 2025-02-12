@@ -8,7 +8,10 @@ import { trimPrompt } from './ai/providers'
 import { systemPrompt } from './prompt'
 import zodToJsonSchema from 'zod-to-json-schema'
 import { type TavilySearchResponse } from '@tavily/core'
+import { type SearchResponse as FirecrawlSearchResponse } from '@mendable/firecrawl-js'
 import { useTavily } from '~/composables/useTavily'
+import { useFirecrawl } from '~/composables/useFirecrawl'
+import { useConfigStore } from '~/stores/config'
 import { useAiModel } from '~/composables/useAiProvider'
 
 export type ResearchResult = {
@@ -20,12 +23,19 @@ export interface WriteFinalReportParams {
   prompt: string
   learnings: string[]
 }
-// useRuntimeConfig()
+
 // Used for streaming response
 export type SearchQuery = z.infer<typeof searchQueriesTypeSchema>['queries'][0]
 export type PartialSearchQuery = DeepPartial<SearchQuery>
-export type SearchResult = z.infer<typeof searchResultTypeSchema>
-export type PartialSearchResult = DeepPartial<SearchResult>
+
+type WebSearchResult = TavilySearchResponse | FirecrawlSearchResponse
+
+interface ProcessedSearchResult {
+  learnings: string[]
+  followUpQuestions: string[]
+}
+
+export type PartialProcessedResult = DeepPartial<ProcessedSearchResult>
 
 export type ResearchStep =
   | { type: 'generating_query'; result: PartialSearchQuery; nodeId: string }
@@ -40,13 +50,13 @@ export type ResearchStep =
   | {
       type: 'processing_serach_result'
       query: string
-      result: PartialSearchResult
+      result: PartialProcessedResult
       nodeId: string
     }
   | {
       type: 'processed_search_result'
       query: string
-      result: SearchResult
+      result: ProcessedSearchResult
       nodeId: string
     }
   | { type: 'error'; message: string; nodeId: string }
@@ -114,6 +124,7 @@ export const searchResultTypeSchema = z.object({
   learnings: z.array(z.string()),
   followUpQuestions: z.array(z.string()),
 })
+
 function processSearchResult({
   query,
   result,
@@ -121,7 +132,7 @@ function processSearchResult({
   numFollowUpQuestions = 3,
 }: {
   query: string
-  result: TavilySearchResponse
+  result: WebSearchResult
   numLearnings?: number
   numFollowUpQuestions?: number
 }) {
@@ -136,9 +147,11 @@ function processSearchResult({
       ),
   })
   const jsonSchema = JSON.stringify(zodToJsonSchema(schema))
-  const contents = compact(result.results.map((item) => item.content)).map(
-    (content) => trimPrompt(content, 25_000),
-  )
+  const contents = compact(
+    'results' in result
+      ? result.results.map((item) => item.content)
+      : result.data.map((item) => item.markdown)
+  ).map((content) => trimPrompt(content, 25_000))
   const prompt = [
     `Given the following contents from a SERP search for the query <query>${query}</query>, generate a list of learnings from the contents. Return a maximum of ${numLearnings} learnings, but feel free to return less if the contents are clear. Make sure each learning is unique and not similar to each other. The learnings should be concise and to the point, as detailed and information dense as possible. Make sure to include any entities like people, places, companies, products, things, etc in the learnings, as well as any exact metrics, numbers, or dates. The learnings will be used to research the topic further.`,
     `<contents>${contents
@@ -254,20 +267,34 @@ export async function deepResearch({
             nodeId: childNodeId(nodeId, i),
           })
           try {
-            // const result = await firecrawl.search(searchQuery.query, {
-            //   timeout: 15000,
-            //   limit: 5,
-            //   scrapeOptions: { formats: ['markdown'] },
-            // });
-            const result = await useTavily().search(searchQuery.query, {
-              maxResults: 5,
-            })
-            console.log(
-              `Ran ${searchQuery.query}, found ${result.results.length} contents`,
-            )
+            const config = useConfigStore()
+            let result: WebSearchResult
+            let newUrls: string[] = []
 
-            // Collect URLs from this search
-            const newUrls = compact(result.results.map((item) => item.url))
+            if (config.config.webSearch.provider === 'tavily') {
+              result = await useTavily().search(searchQuery.query, {
+                maxResults: 5,
+              })
+              console.log(
+                `[Tavily] Ran ${searchQuery.query}, found ${result.results.length} contents`,
+              )
+              newUrls = compact(result.results.map((item) => item.url))
+            } else {
+              result = await useFirecrawl().search(searchQuery.query, {
+                timeout: 15000,
+                limit: 5,
+                scrapeOptions: { 
+                  formats: ['markdown'],
+                  onlyMainContent: true,
+                  waitFor: 3000,
+                  removeBase64Images: true,
+                },
+              })
+              console.log(
+                `[Firecrawl] Ran ${searchQuery.query}, found ${result.data.length} contents`,
+              )
+              newUrls = compact(result.data.map((item) => item.url))
+            }
             onProgress({
               type: 'search_complete',
               urls: newUrls,
@@ -281,7 +308,7 @@ export async function deepResearch({
               result,
               numFollowUpQuestions: nextBreadth,
             })
-            let searchResult: PartialSearchResult = {}
+            let searchResult: PartialProcessedResult = {}
 
             for await (const parsedLearnings of parseStreamingJson(
               searchResultGenerator.textStream,
@@ -328,7 +355,7 @@ export async function deepResearch({
               const nextQuery = `
               Previous research goal: ${searchQuery.researchGoal}
               Follow-up research directions: ${searchResult.followUpQuestions
-                .map((q) => `\n${q}`)
+                .map((q: string) => `\n${q}`)
                 .join('')}
             `.trim()
 
