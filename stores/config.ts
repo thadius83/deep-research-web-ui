@@ -1,11 +1,8 @@
 import { defineStore } from 'pinia'
 import { useLocalStorage } from '@vueuse/core'
-import { useEnvConfig } from '~/composables/useEnvConfig'
-import { onMounted } from 'vue'
 
 export type ConfigAiProvider = 'openai-compatible'
 
-const isEnvValue = (value: string) => value === '****ENV****'
 export interface ConfigAi {
   provider: ConfigAiProvider
   apiKey?: string
@@ -13,6 +10,7 @@ export interface ConfigAi {
   model: string
   contextSize?: number
 }
+
 export interface ConfigWebSearch {
   provider: 'tavily' | 'firecrawl'
   apiKey?: string
@@ -25,8 +23,6 @@ export interface Config {
 }
 
 export const useConfigStore = defineStore('config', () => {
-  const runtimeConfig = useRuntimeConfig()
-
   // Default config values
   const defaultConfig: Config = {
     ai: {
@@ -37,168 +33,143 @@ export const useConfigStore = defineStore('config', () => {
     },
     webSearch: {
       provider: 'firecrawl',
-      apiBase: 'https://api/firecrawl.dev/v1',
+      apiBase: 'https://api.firecrawl.dev/v1',
     },
   }
 
-  const envConfig = useEnvConfig()
-
-  // Auto-sync with localStorage
-  const config = useLocalStorage<Config>('deep-research-config', defaultConfig)
-
-  // Check if a value exists
-  const hasValidEnvValue = (value?: string) => {
-    return typeof value === 'string' && value.length > 0
-  }
-
-  // Update environment values on client mount in case localStorage is stale.
-  onMounted(() => {
-    // 1. Set provider if specified by environment
-    const defaultProvider = runtimeConfig.public.defaultSearchProvider
-    if (hasValidEnvValue(defaultProvider)) {
-      console.log('Updating onMounted: Setting default provider from env:', defaultProvider)
-      config.value.webSearch.provider = defaultProvider as 'tavily' | 'firecrawl'
+  // Try to use localStorage, fall back to memory storage
+  const config = useLocalStorage<Config>('deep-research-config', defaultConfig, {
+    mergeDefaults: true,
+    onError: (error) => {
+      console.warn('Storage error (falling back to memory storage):', error)
     }
-
-    // 2. Set API keys from environment (overriding localStorage if necessary)
-    const openaiKey = runtimeConfig.public.openaiKey
-    if (hasValidEnvValue(openaiKey)) {
-      console.log('Updating onMounted: Setting OpenAI key from env')
-      config.value.ai.apiKey = '****ENV****'
-    }
-
-    const currentProvider = config.value.webSearch.provider
-    const webSearchKey =
-      currentProvider === 'firecrawl'
-        ? runtimeConfig.public.firecrawlKey
-        : runtimeConfig.public.tavilyKey
-    if (hasValidEnvValue(webSearchKey)) {
-      console.log(`Updating onMounted: Setting ${currentProvider} key from env`)
-      config.value.webSearch.apiKey = '****ENV****'
-    }
-
-    // 3. Set base URLs using the runtime values directly
-    const openaiUrl = runtimeConfig.public.openaiEndpoint
-    if (hasValidEnvValue(openaiUrl)) {
-      console.log('Updating onMounted: Setting OpenAI endpoint from env:', openaiUrl)
-      config.value.ai.apiBase = openaiUrl
-    }
-    const webSearchUrl =
-      currentProvider === 'firecrawl'
-        ? runtimeConfig.public.firecrawlBaseUrl
-        : runtimeConfig.public.tavilyBaseUrl
-    if (hasValidEnvValue(webSearchUrl)) {
-      console.log(`Updating onMounted: Setting ${currentProvider} base URL from env:`, webSearchUrl)
-      config.value.webSearch.apiBase = webSearchUrl
-    }
-
-    // 4. Set model and context size from environment
-    const model = runtimeConfig.public.openaiModel
-    if (hasValidEnvValue(model)) {
-      console.log('Updating onMounted: Setting OpenAI model from env:', model)
-      config.value.ai.model = model
-    }
-    const contextSize = runtimeConfig.public.contextSize
-    if (hasValidEnvValue(contextSize)) {
-      console.log('Updating onMounted: Setting context size from env:', contextSize)
-      config.value.ai.contextSize = Number(contextSize)
-    }
-
-    console.log('Final config after onMounted env initialization:', {
-      ai: {
-        ...config.value.ai,
-        apiKey: config.value.ai.apiKey ? '****' : undefined,
-      },
-      webSearch: {
-        ...config.value.webSearch,
-        apiKey: config.value.webSearch.apiKey ? '****' : undefined,
-      }
-    })
   })
 
-  // Getter for actual API keys (de-obfuscate using env values if needed)
-  const getActualApiKey = (type: 'ai' | 'webSearch') => {
-    if (type === 'ai') {
-      const envKey = runtimeConfig.public.openaiKey
-      const uiKey = config.value.ai.apiKey
-      if (isEnvValue(uiKey || '') && envKey) {
-        return envKey
+  // Get base URL for API requests
+  function getBaseUrl() {
+    if (process.server) return ''
+    return window.location.origin || ''
+  }
+
+  // Load initial config from server
+  async function loadConfig() {
+    try {
+      const response = await fetch(getBaseUrl() + '/api/config')
+      if (!response.ok) {
+        throw new Error(`Failed to load config: ${response.status} ${response.statusText}`)
       }
-      return uiKey || ''
-    } else {
-      const provider = config.value.webSearch.provider
-      const envKey =
-        provider === 'tavily'
-          ? runtimeConfig.public.tavilyKey
-          : runtimeConfig.public.firecrawlKey
-      const uiKey = config.value.webSearch.apiKey
-      if (isEnvValue(uiKey || '') && envKey) {
-        return envKey
+      const serverConfig = await response.json()
+      
+      // Update local config with server values, preserving any local overrides
+      const runtimeConfig = useRuntimeConfig()
+      config.value = {
+        ai: {
+          ...config.value.ai,
+          ...serverConfig.ai,
+          // Keep local API key if we have one and no env var
+          apiKey: !runtimeConfig.public.openaiKey ? config.value.ai.apiKey : serverConfig.ai.apiKey,
+        },
+        webSearch: {
+          ...config.value.webSearch,
+          ...serverConfig.webSearch,
+          // Keep local API key if we have one and no env var
+          apiKey: !(config.value.webSearch.provider === 'tavily' 
+            ? runtimeConfig.public.tavilyKey 
+            : runtimeConfig.public.firecrawlKey)
+            ? config.value.webSearch.apiKey 
+            : serverConfig.webSearch.apiKey,
+        },
       }
-      return uiKey || ''
+    } catch (error) {
+      console.error('Error loading config:', error)
+      // On error, keep using local config + env vars
+      const runtimeConfig = useRuntimeConfig()
+      if (runtimeConfig.public.openaiKey || runtimeConfig.public.tavilyKey || runtimeConfig.public.firecrawlKey) {
+        console.log('Using environment variables for configuration')
+      }
+    }
+  }
+
+  // Save config to server
+  async function saveConfig() {
+    try {
+      const response = await fetch(getBaseUrl() + '/api/config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(config.value),
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Failed to save config: ${response.status} ${response.statusText}`)
+      }
+      
+      const serverConfig = await response.json()
+      
+      // Update local config with server response, preserving any local overrides
+      const runtimeConfig = useRuntimeConfig()
+      config.value = {
+        ai: {
+          ...config.value.ai,
+          ...serverConfig.ai,
+          // Keep local API key if we have one and no env var
+          apiKey: !runtimeConfig.public.openaiKey ? config.value.ai.apiKey : serverConfig.ai.apiKey,
+        },
+        webSearch: {
+          ...config.value.webSearch,
+          ...serverConfig.webSearch,
+          // Keep local API key if we have one and no env var
+          apiKey: !(config.value.webSearch.provider === 'tavily' 
+            ? runtimeConfig.public.tavilyKey 
+            : runtimeConfig.public.firecrawlKey)
+            ? config.value.webSearch.apiKey 
+            : serverConfig.webSearch.apiKey,
+        },
+      }
+    } catch (error) {
+      console.error('Error saving config:', error)
+      // On error, keep using current config
     }
   }
 
   // Method to update the search provider and update keys/URLs accordingly
-  const updateProvider = (provider: 'tavily' | 'firecrawl') => {
+  const updateProvider = async (provider: 'tavily' | 'firecrawl') => {
     const oldProvider = config.value.webSearch.provider
     console.log('Updating provider:', { from: oldProvider, to: provider })
 
     config.value.webSearch.provider = provider
-
-    const envKey =
-      provider === 'firecrawl'
-        ? runtimeConfig.public.firecrawlKey
-        : runtimeConfig.public.tavilyKey
-
-    if (envKey) {
-      console.log(`Setting ${provider} key from env`)
-      config.value.webSearch.apiKey = '****ENV****'
-    } else {
-      if (isEnvValue(config.value.webSearch.apiKey || '')) {
-        console.log('Clearing env key after provider change')
-        config.value.webSearch.apiKey = ''
-      }
-    }
-
-    const envUrl =
-      provider === 'firecrawl'
-        ? runtimeConfig.public.firecrawlBaseUrl
-        : runtimeConfig.public.tavilyBaseUrl
-
-    if (envUrl && envUrl.length > 0) {
-      console.log(`Setting ${provider} base URL from env:`, envUrl)
-      config.value.webSearch.apiBase = envUrl
-    } else {
-      config.value.webSearch.apiBase = getDefaultApiBase(provider)
-    }
-
-    console.log('Provider update complete:', {
-      provider: config.value.webSearch.provider,
-      apiBase: config.value.webSearch.apiBase,
-      hasKey: !!config.value.webSearch.apiKey
-    })
-  }
-
-  // Helper to get default API URL for a provider
-  const getDefaultApiBase = (provider: 'tavily' | 'firecrawl') => {
-    return provider === 'firecrawl'
+    config.value.webSearch.apiBase = provider === 'firecrawl'
       ? 'https://api.firecrawl.dev/v1'
       : 'https://api.tavily.com'
+
+    await saveConfig()
   }
 
-  // Watch for API base changes to clear keys when necessary
-  watch(() => config.value.ai.apiBase, (newEndpoint?: string, oldEndpoint?: string) => {
-    if (!newEndpoint || !oldEndpoint || newEndpoint === oldEndpoint) return
-    if (isEnvValue(config.value.ai.apiKey || '')) {
-      console.log('Endpoint changed while using env key - clearing key')
-      config.value.ai.apiKey = ''
+  // Get the actual API key for a given service
+  const getActualApiKey = (type: 'ai' | 'webSearch') => {
+    const runtimeConfig = useRuntimeConfig()
+    
+    if (type === 'ai') {
+      // Use environment variable if available, otherwise use stored key
+      return runtimeConfig.public.openaiKey || config.value.ai.apiKey || ''
+    } else {
+      // Use environment variable based on provider if available, otherwise use stored key
+      return config.value.webSearch.provider === 'tavily'
+        ? (runtimeConfig.public.tavilyKey || config.value.webSearch.apiKey || '')
+        : (runtimeConfig.public.firecrawlKey || config.value.webSearch.apiKey || '')
     }
-  })
+  }
+
+  // Load config on store initialization
+  if (process.client) {
+    loadConfig()
+  }
 
   return {
     config,
+    updateProvider,
+    saveConfig,
     getActualApiKey,
-    updateProvider
   }
 })

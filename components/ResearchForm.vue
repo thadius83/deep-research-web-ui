@@ -22,18 +22,21 @@
   })
 
   const store = useConfigStore()
+  const runtimeConfig = useRuntimeConfig()
 
   const configManager = inject<{ show: () => void }>('configManager')
 
-  // Updated key checks: return a valid key if it is a nonempty string
+  // Check for API keys in both environment and user config
   const hasAiKey = computed(() => {
     const key = store.getActualApiKey('ai')
     return typeof key === 'string' && key.length > 0
   })
+
   const hasWebSearchKey = computed(() => {
     const key = store.getActualApiKey('webSearch')
     return typeof key === 'string' && key.length > 0
   })
+
   const hasConfig = computed(() => hasAiKey.value && hasWebSearchKey.value)
 
   // Check that all form fields are set
@@ -49,7 +52,11 @@
     console.log('Form state:', {
       hasFormValues: hasFormValues.value,
       hasAiKey: hasAiKey.value,
-      hasWebSearchKey: hasWebSearchKey.value
+      hasWebSearchKey: hasWebSearchKey.value,
+      envAiKey: !!runtimeConfig.public.openaiKey,
+      envSearchKey: store.config.webSearch.provider === 'tavily' 
+        ? !!runtimeConfig.public.tavilyKey 
+        : !!runtimeConfig.public.firecrawlKey
     })
   }, { immediate: true })
 

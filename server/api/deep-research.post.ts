@@ -1,11 +1,15 @@
-// This file is currently unused
-import { deepResearch, ResearchStep } from '~/lib/deep-research'
+import { ResearchStep } from '~/lib/deep-research'
+import { useAiClient } from '../utils/ai-client'
+import { useTavily } from '../utils/tavily-client'
+import { useFirecrawl } from '../utils/firecrawl-client'
+import { getConfig } from '../utils/server-config'
+import { serverDeepResearch } from '../utils/deep-research'
 
 export default defineEventHandler(async (event) => {
   const { initialQuery, feedback, depth, breadth } = await readBody(event)
   console.log({ initialQuery, feedback, depth, breadth })
 
-  // 设置 SSE 响应头
+  // Set SSE headers
   setHeader(event, 'Content-Type', 'text/event-stream')
   setHeader(event, 'Cache-Control', 'no-cache')
   setHeader(event, 'Connection', 'keep-alive')
@@ -19,15 +23,41 @@ ${feedback.map((qa: { question: string; answer: string }) => `Q: ${qa.question}\
   return new Promise<void>(async (resolve, reject) => {
     const onProgress = (data: ResearchStep) => {
       console.log(data)
-      // 发送进度事件
+      // Send progress events
       event.node.res.write(`data: ${JSON.stringify(data)}\n\n`)
     }
-    await deepResearch({
-      query: combinedQuery,
-      breadth,
-      depth,
-      onProgress,
-    })
-    resolve()
+
+    try {
+      // Get the current config
+      const config = getConfig()
+
+      // Initialize clients
+      const aiClient = useAiClient()
+      const searchClient = config.webSearch.provider === 'tavily' 
+        ? useTavily()
+        : useFirecrawl()
+
+      await serverDeepResearch({
+        query: combinedQuery,
+        breadth,
+        maxDepth: depth,
+        onProgress,
+        clients: {
+          ai: aiClient,
+          search: searchClient,
+        },
+      })
+
+      resolve()
+    } catch (error) {
+      console.error('Deep research error:', error)
+      const errorStep: ResearchStep = {
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        nodeId: '0',
+      }
+      onProgress(errorStep)
+      resolve() // Resolve instead of reject to ensure the error is sent to the client
+    }
   })
 })
