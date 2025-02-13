@@ -14,15 +14,11 @@
         </div>
 
         <div>
-          This is a web UI for
+          This is an enhanced web UI fork of
           <ULink target="_blank" href="https://github.com/dzhng/deep-research">
             dzhng/deep-research
           </ULink>
-          . It features streaming AI responses for real-time feedback and
-          visualization of the research process using a tree structure.
-          <br />
-          All API requests are sent directly from your browser. No data is stored
-          remotely.
+          . It features streaming AI responses, tree visualization, and secure API key handling - keys are automatically protected when endpoints change.
         </div>
 
         <ResearchForm

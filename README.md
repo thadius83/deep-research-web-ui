@@ -1,92 +1,122 @@
 # Deep Research Web UI
 
-This is a web UI for https://github.com/dzhng/deep-research.
+This is an enhanced web UI fork of [dzhng/deep-research](https://github.com/dzhng/deep-research), building upon the excellent web interface implementation by [AnotiaWang](https://github.com/AnotiaWang/deep-research-web-ui). Our fork adds Docker support, enhanced configuration options, and improved security features.
 
-> Note: The project is currently WIP, expect bugs.
+## Features
 
-<video src="https://github.com/user-attachments/assets/c3738551-b258-47c6-90a8-fd097e5165c8"></video>
+- 🔒 Bring Your Own API Key
+- 🔄 Stream AI responses for realtime feedback
+- 🌳 Visualization of the research process using a tree structure
+- 🐳 Docker support for easy deployment
+- ⚙️ Flexible configuration via UI or environment variables
+- 🔐 Enhanced API key security (keys are wiped when endpoints change)
 
-Features:
+### Available Providers
 
-- Stream AI responses for realtime feedback
-- Viasualization of the research process using a tree structure
-- Bring Your Own API Key: Everything (config, API requests, ...) happens in your browser
+- **AI**: OpenAI compatible APIs
+- **Web Search**: 
+  - Tavily (1000 credits/month free quota)
+  - Firecrawl (self-hosted option)
+  - [Custom Firecrawl with Google Search](https://github.com/thadius83/firecrawl-customgoogle) - A modified version of Firecrawl that provides direct Google search support without requiring credits or payments
 
-Available providers currently:
-- AI: OpenAI compatible
-- Web Search: Tavily (similar to Firecrawl, but with more free quota (1000 credits / month))
+## Quick Start
 
-## Setup
+### Using Docker
 
-Make sure to install dependencies:
-
+1. Clone the repository and create your environment file:
 ```bash
-# npm
-npm install
+git clone https://github.com/thadius83/deep-research-web-ui.git
+cd deep-research-web-ui
+cp .env.example .env
+```
 
-# pnpm
+2. Configure your environment variables in `.env`
+
+3. Build and run with Docker:
+```bash
+docker compose up --build
+```
+
+The application will be available at `http://localhost:5006`
+
+### Standalone Setup
+
+Install dependencies:
+```bash
+# Using pnpm (recommended)
 pnpm install
 
-# yarn
+# Or npm
+npm install
+
+# Or yarn
 yarn install
-
-# bun
-bun install
 ```
 
-## Development Server
+Start the development server:
+```bash
+pnpm dev    # or npm run dev / yarn dev
+```
 
-Start the development server on `http://localhost:3000`:
+The application will be available at `http://localhost:3000`
+
+## Configuration
+
+### Environment Variables
+
+Key environment variables:
 
 ```bash
-# npm
-npm run dev
+# AI Provider Settings
+OPENAI_KEY=""                   # Your OpenAI API key
+OPENAI_ENDPOINT=""             # Optional: Custom endpoint for OpenAI-compatible APIs
+OPENAI_MODEL=""                # Model to use (e.g., "gpt-4", "deepseek-r1:32b")
+CONTEXT_SIZE="128000"          # Optional: Context size for the model
 
-# pnpm
-pnpm dev
+# Web Search Provider Settings
+DEFAULT_SEARCH_PROVIDER=""     # Default search provider ("tavily" or "firecrawl")
 
-# yarn
-yarn dev
+# Tavily Settings
+TAVILY_KEY=""                  # Your Tavily API key
+TAVILY_BASE_URL=""            # Optional: Custom Tavily API endpoint
 
-# bun
-bun run dev
+# Firecrawl Settings
+FIRECRAWL_KEY=""              # Your Firecrawl API key
+FIRECRAWL_BASE_URL=""         # Optional: Custom Firecrawl endpoint
 ```
 
-## Production
+### Security Features
 
-Build the application for production:
+- API keys can be set via environment variables or the UI
+- When changing API endpoints in the UI, associated API keys are automatically wiped for security
+- No data is stored remotely - all operations happen in your browser
+- Environment variables take precedence over UI settings
 
+## Development
+
+### Production Build
+
+Build the application:
 ```bash
-# npm
-npm run build
-
-# pnpm
-pnpm build
-
-# yarn
-yarn build
-
-# bun
-bun run build
+pnpm build    # or npm run build / yarn build
 ```
 
-Locally preview production build:
-
+Preview production build:
 ```bash
-# npm
-npm run preview
-
-# pnpm
-pnpm preview
-
-# yarn
-yarn preview
-
-# bun
-bun run preview
+pnpm preview  # or npm run preview / yarn preview
 ```
 
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+### Docker Production Build
+
+For production deployment with Docker:
+```bash
+docker compose -f docker-compose.yml up -d
+```
+
+## Additional Resources
+
+- [Nuxt.js Deployment Documentation](https://nuxt.com/docs/getting-started/deployment)
+- [Original Deep Research Repository](https://github.com/dzhng/deep-research)
 
 ## License
 
