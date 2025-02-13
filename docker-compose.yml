@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NODE_ENV=production
+    ports:
+      - "5006:3000"
+    env_file:
+      - .env
+    environment:
+      # Nuxt Settings
+      - NUXT_HOST=0.0.0.0
+      - NUXT_PORT=3000
+      # Override any env_file values here if needed
+      - OPENAI_KEY=${OPENAI_KEY:-}
+      - TAVILY_KEY=${TAVILY_KEY:-}
+      - FIRECRAWL_KEY=${FIRECRAWL_KEY:-}
+    restart: unless-stopped

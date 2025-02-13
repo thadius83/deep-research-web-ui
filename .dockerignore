@@ -1,0 +1,31 @@
+# Development artifacts
+.nuxt
+.output
+.nitro
+.cache
+dist
+
+# Node modules (will be installed fresh in container)
+node_modules
+
+# Version control
+.git
+.gitignore
+
+# IDE and system files
+.DS_Store
+.fleet
+.idea
+.vscode
+
+# Logs
+logs
+*.log
+
+# Cline specific
+memory_bank
+.clinerules
+
+# Keep env files for build
+!.env
+!.env.example
