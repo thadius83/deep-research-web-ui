@@ -59,6 +59,12 @@ export const searchResultTypeSchema = z.object({
   followUpQuestions: z.array(z.string()),
 })
 
+interface ResearchPrompts {
+  mainPrompt: string;
+  followUpTemplate: string;
+  learningTemplate: string;
+}
+
 interface Clients {
   ai: {
     streamText: (params: { prompt: string; system?: string; model?: string; abortSignal?: AbortSignal }) => Promise<{ textStream: AsyncGenerator<string, void, unknown> }>
@@ -78,6 +84,7 @@ export async function serverDeepResearch({
   currentDepth = 1,
   nodeId = '0',
   clients,
+  prompts,
 }: {
   query: string
   breadth: number
@@ -87,7 +94,8 @@ export async function serverDeepResearch({
   onProgress: (step: ResearchStep) => void
   currentDepth?: number
   nodeId?: string
-  clients: Clients
+  clients: Clients;
+  prompts: ResearchPrompts;
 }): Promise<ResearchResult> {
   try {
     const schema = z.object({
@@ -106,16 +114,7 @@ export async function serverDeepResearch({
     })
     const jsonSchema = JSON.stringify(zodToJsonSchema(schema))
 
-    const now = new Date().toISOString()
-    const prompt = [
-      `Today is ${now}. Given the following prompt from the user, generate a list of SERP queries to research the topic. Return a maximum of ${breadth} queries, but feel free to return less if the original prompt is clear. Make sure each query is unique and not similar to each other: <prompt>${query}</prompt>\n\n`,
-      learnings
-        ? `Here are some learnings from previous research, use them to generate more specific queries: ${learnings.join(
-            '\n',
-          )}`
-        : '',
-      `You MUST respond in JSON with the following schema: ${jsonSchema}`,
-    ].join('\n\n')
+    const prompt = prompts.mainPrompt
 
     const searchQueriesResult = await clients.ai.streamText({
       prompt,
@@ -196,13 +195,16 @@ export async function serverDeepResearch({
                 : result.data?.map((item) => item.markdown || '') || []
             ).map((content) => trimPrompt(content, 25_000))
 
-            const processPrompt = [
-              `Today is ${now}. Given the following contents from a SERP search for the query <query>${searchQuery.query}</query>, generate a list of learnings from the contents. Return a maximum of 5 learnings, but feel free to return less if the contents are clear. Make sure each learning is unique and not similar to each other. The learnings should be concise and to the point, as detailed and information dense as possible. Make sure to include any entities like people, places, companies, products, things, etc in the learnings, as well as any exact metrics, numbers, or dates. The learnings will be used to research the topic further.`,
-              `<contents>${contents
-                .map((content) => `<content>\n${content}\n</content>`)
-                .join('\n')}</contents>`,
-              `You MUST respond in JSON with the following schema: ${JSON.stringify(zodToJsonSchema(searchResultTypeSchema))}`,
-            ].join('\n\n')
+            // Create context for processing search results
+            const searchContext = {
+              query: searchQuery.query,
+              searchResults: contents.map((content) => `<content>\n${content}\n</content>`).join('\n'),
+              sources: result.results || result.data || [],
+              currentDate: new Date().toISOString(),
+              learnings: learnings,
+            };
+
+            const processPrompt = prompts.mainPrompt
 
             const searchResultGenerator = await clients.ai.streamText({
               prompt: processPrompt,
@@ -264,6 +266,7 @@ export async function serverDeepResearch({
                 currentDepth: nextDepth,
                 nodeId: childNodeId(nodeId, i),
                 clients,
+                prompts,
               })
             } else {
               return {

@@ -1,4 +1,6 @@
 import { ResearchStep } from '~/lib/deep-research'
+import type { ResearchContext } from '~/research-methods/types'
+import { getResearchPrompts } from '../utils/research-method'
 import { useAiClient } from '../utils/ai-client'
 import { useTavily } from '../utils/tavily-client'
 import { useFirecrawl } from '../utils/firecrawl-client'
@@ -6,7 +8,7 @@ import { getConfig } from '../utils/server-config'
 import { serverDeepResearch } from '../utils/deep-research'
 
 export default defineEventHandler(async (event) => {
-  const { initialQuery, feedback, depth, breadth } = await readBody(event)
+  const { initialQuery, feedback, depth, breadth, methodId } = await readBody(event)
   console.log({ initialQuery, feedback, depth, breadth })
 
   // Set SSE headers
@@ -37,7 +39,19 @@ ${feedback.map((qa: { question: string; answer: string }) => `Q: ${qa.question}\
         ? useTavily()
         : useFirecrawl()
 
+      // Create research context
+      const context: ResearchContext = {
+        query: combinedQuery,
+        searchResults: [],
+        sources: [],
+        currentDate: new Date().toISOString(),
+      };
+
+      // Get method-specific prompts
+      const prompts = getResearchPrompts(methodId, context);
+
       await serverDeepResearch({
+        prompts,
         query: combinedQuery,
         breadth,
         maxDepth: depth,

@@ -4,6 +4,7 @@
     breadth: number
     depth: number
     numQuestions: number
+    methodId: string
   }
 
   defineProps<{
@@ -14,12 +15,24 @@
     (e: 'submit', value: ResearchInputData): void
   }>()
 
-  const form = reactive({
+  const { selectedMethodId } = useResearchMethod();
+
+  const defaultValues = {
     query: '',
     breadth: 2,
     depth: 2,
     numQuestions: 3,
-  })
+  };
+
+  const form = reactive({
+    ...defaultValues,
+    get methodId() {
+      return selectedMethodId.value;
+    },
+    set methodId(value: string) {
+      selectedMethodId.value = value;
+    }
+  });
 
   const store = useConfigStore()
   const runtimeConfig = useRuntimeConfig()
@@ -41,7 +54,7 @@
 
   // Check that all form fields are set
   const hasFormValues = computed(() =>
-    form.query && form.breadth && form.depth && form.numQuestions
+    form.query && form.breadth && form.depth && form.numQuestions && form.methodId
   )
 
   const isSubmitButtonDisabled = computed(
@@ -61,7 +74,10 @@
   }, { immediate: true })
 
   function handleSubmit() {
-    emit('submit', { ...form })
+    emit('submit', {
+      ...form,
+      methodId: form.methodId // Ensure we get the current value
+    })
   }
 
   defineExpose({
@@ -75,6 +91,8 @@
       <h2 class="font-bold">1. Research Topic</h2>
     </template>
     <div class="flex flex-col gap-2">
+      <ResearchMethodSelector />
+      
       <UFormField label="Research Topic" required>
         <UTextarea
           class="w-full"

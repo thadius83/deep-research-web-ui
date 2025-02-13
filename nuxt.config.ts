@@ -1,7 +1,11 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { resolve } from 'path'
 export default defineNuxtConfig({
   runtimeConfig: {
     public: {
+      // Development Mode
+      dev: process.env.NODE_ENV !== 'production',
+      
       // AI Provider Settings
       openaiKey: process.env.OPENAI_KEY || '',
       openaiEndpoint: process.env.OPENAI_ENDPOINT || 'https://api.openai.com/v1',
@@ -50,5 +54,19 @@ export default defineNuxtConfig({
   // Development server configuration
   devServer: {
     host: '0.0.0.0',
+  },
+
+  // Auto-import directories
+  imports: {
+    dirs: [
+      'composables',
+      'research-methods',
+      'research-methods/methods'
+    ]
+  },
+
+  // Configure aliases
+  alias: {
+    'research-methods': resolve(__dirname, './research-methods')
   },
 })
