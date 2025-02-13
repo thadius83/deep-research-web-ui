@@ -9,8 +9,7 @@ import { systemPrompt } from './prompt'
 import zodToJsonSchema from 'zod-to-json-schema'
 import { type TavilySearchResponse } from '@tavily/core'
 import { type SearchResponse as FirecrawlSearchResponse } from '@mendable/firecrawl-js'
-import { useTavily } from '~/composables/useTavily'
-import { useFirecrawl } from '~/composables/useFirecrawl'
+import { useServerSearch } from '~/composables/useServerSearch'
 import { useConfigStore } from '~/stores/config'
 import { useAiModel } from '~/composables/useAiProvider'
 
@@ -268,38 +267,33 @@ export async function deepResearch({
           })
           try {
             const config = useConfigStore()
-            let result: WebSearchResult
-            let newUrls: string[] = []
+            const search = useServerSearch()
 
-            if (config.config.webSearch.provider === 'tavily') {
-              result = await useTavily().search(searchQuery.query, {
-                maxResults: 5,
-              })
-              console.log(
-                `[Tavily] Ran ${searchQuery.query}, found ${result.results.length} contents`,
-              )
-              newUrls = compact(result.results.map((item) => item.url))
-            } else {
-              result = await useFirecrawl().search(searchQuery.query, {
-                timeout: 15000,
-                limit: 5,
-                scrapeOptions: { 
-                  formats: ['markdown'],
-                  onlyMainContent: true,
-                  waitFor: 3000,
-                  removeBase64Images: true,
-                },
-              })
-              console.log(
-                `[Firecrawl] Ran ${searchQuery.query}, found ${result.data.length} contents`,
-              )
-              newUrls = compact(result.data.map((item) => item.url))
-            }
+            // Use server-side search endpoint
+            const result = await search.search(searchQuery.query, {
+              maxResults: 5,
+              limit: 5,
+              timeout: 15000,
+              scrapeOptions: { 
+                formats: ['markdown'],
+                onlyMainContent: true,
+                waitFor: 3000,
+                removeBase64Images: true,
+              },
+            })
+
+            const newUrls = compact(
+              'results' in result
+                ? result.results.map((item) => item.url)
+                : result.data.map((item) => item.url)
+            )
+
             onProgress({
               type: 'search_complete',
               urls: newUrls,
               nodeId: childNodeId(nodeId, i),
             })
+
             // Breadth for the next search is half of the current breadth
             const nextBreadth = Math.ceil(breadth / 2)
 

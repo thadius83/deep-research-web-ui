@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useConfigStore } from '@/stores/config'
+import ModelSelector from './ModelSelector.vue'
 
 const showModal = ref(false)
+const storageError = ref(false)
 const store = useConfigStore()
 const runtimeConfig = useRuntimeConfig()
 
@@ -13,9 +15,9 @@ const { config } = storeToRefs(store)
 // Use a computed property for the provider that reads from the reactive ref
 const provider = computed({
   get: () => config.value.webSearch.provider,
-  set: (value: 'tavily' | 'firecrawl') => {
+  set: async (value: 'tavily' | 'firecrawl') => {
     console.log('Updating provider to:', value)
-    store.updateProvider(value)
+    await store.updateProvider(value)
   }
 })
 
@@ -64,14 +66,32 @@ const isFirecrawlBaseUrlFromEnv = computed(() => {
   return hasCustomUrl
 })
 
-// Watch for modal open to ensure config is up to date
-watch(() => showModal.value, (isOpen) => {
+// Watch for modal open to ensure config is up to date and check storage access
+watch(() => showModal.value, async (isOpen) => {
   if (isOpen) {
+    try {
+      // Test storage access
+      localStorage.setItem('storage-test', 'test')
+      localStorage.removeItem('storage-test')
+      storageError.value = false
+    } catch (error) {
+      console.warn('Storage access error:', error)
+      storageError.value = true
+    }
+
     console.log('Modal opened, current config:', {
       provider: provider.value,
       apiBase: config.value.webSearch.apiBase,
-      hasCustomUrl: isFirecrawlBaseUrlFromEnv.value
+      hasCustomUrl: isFirecrawlBaseUrlFromEnv.value,
+      storageAccess: !storageError.value
     })
+  }
+})
+
+// Save changes when closing modal
+watch(() => showModal.value, async (isOpen) => {
+  if (!isOpen) {
+    await store.saveConfig()
   }
 })
 
@@ -117,6 +137,7 @@ defineExpose({
                 class="w-full"
                 placeholder="API Key"
                 :disabled="isApiKeyFromEnv"
+                @change="store.saveConfig"
               />
             </UFormField>
             <UFormField label="API Base URL">
@@ -132,6 +153,7 @@ defineExpose({
                 v-model="store.config.ai.apiBase"
                 class="w-full"
                 placeholder="https://api.openai.com/v1"
+                @change="store.saveConfig"
               />
             </UFormField>
             <UFormField label="Model" required>
@@ -148,7 +170,11 @@ defineExpose({
                 class="w-full"
                 placeholder="gpt-4o"
                 :disabled="isModelFromEnv"
+                @change="store.saveConfig"
               />
+            </UFormField>
+            <UFormField label="Available Models">
+              <ModelSelector />
             </UFormField>
           </div>
 
@@ -215,6 +241,7 @@ defineExpose({
                 class="w-full"
                 placeholder="API Key"
                 :disabled="isTavilyKeyFromEnv"
+                @change="store.saveConfig"
               />
             </UFormField>
           </template>
@@ -241,6 +268,7 @@ defineExpose({
                 class="w-full"
                 placeholder="API Key"
                 :disabled="isFirecrawlKeyFromEnv"
+                @change="store.saveConfig"
               />
             </UFormField>
             <UFormField label="API Base URL">
@@ -256,6 +284,7 @@ defineExpose({
                 v-model="config.webSearch.apiBase"
                 class="w-full"
                 placeholder="https://api.firecrawl.dev/v1"
+                @change="store.saveConfig"
               />
             </UFormField>
           </template>
@@ -263,15 +292,20 @@ defineExpose({
       </template>
       <template #footer>
         <div class="flex items-center justify-between gap-2 w-full">
-          <p class="text-sm text-gray-500">
-            Settings are stored locally in your browser.
-          </p>
-            <UButton
-              color="primary"
-              icon="i-lucide-check"
-              @click="showModal = false"
-            >
-            Save
+          <div>
+            <p v-if="!storageError" class="text-sm text-gray-500">
+              Settings are stored locally in your browser and synced with the server.
+            </p>
+            <p v-else class="text-sm text-amber-600">
+              Storage access is blocked. Using environment variables and server-side storage only.
+            </p>
+          </div>
+          <UButton
+            color="primary"
+            icon="i-lucide-check"
+            @click="showModal = false"
+          >
+            Close
           </UButton>
         </div>
       </template>
