@@ -43,22 +43,17 @@ The application will be available at `http://localhost:5006`
 
 Install dependencies:
 ```bash
-# Using pnpm (recommended)
-pnpm install
-
-# Or npm
 npm install
-
-# Or yarn
-yarn install
 ```
 
 Start the development server:
 ```bash
-pnpm dev    # or npm run dev / yarn dev
+npm run dev
 ```
 
 The application will be available at `http://localhost:3000`
+
+Note: While pnpm and yarn are supported, npm is the recommended package manager for this project.
 
 ## Configuration
 
@@ -87,23 +82,26 @@ FIRECRAWL_BASE_URL=""         # Optional: Custom Firecrawl endpoint
 
 ### Security Features
 
-- API keys can be set via environment variables or the UI
-- When changing API endpoints in the UI, associated API keys are automatically wiped for security
-- No data is stored remotely - all operations happen in your browser
-- Environment variables take precedence over UI settings
+- API keys can be set via environment variables or the UI:
+  - Environment variables are loaded first if they exist
+  - If environment variables are not set, UI settings are used
+  - You can use either method based on your preference
+- Enhanced security measures:
+  - When changing API endpoints in the UI, associated API keys are automatically wiped for security
+  - No data is stored remotely - all operations happen in your browser
+  - API keys set in the UI are stored in your browser's local storage
 
 ## Development
 
 ### Production Build
 
-Build the application:
+Build and run the application:
 ```bash
-pnpm build    # or npm run build / yarn build
-```
+# Build the application
+npm run build
 
-Preview production build:
-```bash
-pnpm preview  # or npm run preview / yarn preview
+# Start the production server
+node .output/server/index.mjs
 ```
 
 ### Docker Production Build
