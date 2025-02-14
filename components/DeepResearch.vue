@@ -6,6 +6,7 @@
     type ResearchStep,
   } from '~/lib/deep-research'
   import type { TreeNode } from './Tree.vue'
+  import { ref, nextTick, watch, computed } from 'vue'
 
   const emit = defineEmits<{
     (e: 'complete', results: ResearchResult): void
@@ -13,71 +14,99 @@
 
   const tree = ref<TreeNode>({
     id: '0',
-    label: 'Start',
+    label: 'Deep Research',
     children: [],
   })
   const selectedNode = ref<TreeNode>()
   const searchResults = ref<Record<string, PartialSearchResult>>({})
   const isLoading = ref(false)
 
-  // Scroll to first query without selecting it
-  function scrollToFirstQuery() {
-    if (tree.value.children.length > 0) {
-      const firstNode = tree.value.children[0]
-      nextTick(() => {
-        const element = document.querySelector(`[data-node-id="${firstNode.id}"]`)
-        if (element) {
-          element.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start'
-          })
-        }
-      })
+  // Computed property to safely parse JSON
+  const parsedClassification = computed(() => {
+    try {
+      return selectedNode.value?.classification?.rawResponse 
+        ? JSON.parse(selectedNode.value.classification.rawResponse)
+        : null;
+    } catch (e) {
+      console.error('Failed to parse classification:', e);
+      return null;
     }
+  });
+
+  // Debug watch for classification changes
+  watch(() => selectedNode.value?.classification, (newVal) => {
+    console.log('[Classification] Selected node classification changed:', newVal);
+  }, { deep: true });
+
+  // Helper function to create a new node
+  function createNode(nodeId: string, label = 'Generating...', researchGoal = 'Generating research goal...'): TreeNode {
+    const node = {
+      id: nodeId,
+      label,
+      researchGoal,
+      learnings: [],
+      children: [],
+      classification: undefined
+    }
+    
+    const parentNodeId = getParentNodeId(nodeId)
+    if (parentNodeId === '0') {
+      tree.value.children.push(node)
+      if (nodeId === '0-0') {
+        scrollToFirstQuery()
+      }
+    } else {
+      const parentNode = findNode(tree.value, getParentNodeId(nodeId))
+      if (parentNode) {
+        parentNode.children.push(node)
+      }
+    }
+    return node
   }
 
   function handleResearchProgress(step: ResearchStep) {
-    let node: TreeNode | null = null
-    let nodeId = ''
-
-    if (step.type !== 'complete') {
-      nodeId = step.nodeId
-      node = findNode(tree.value, step.nodeId)
-      if (node) {
-        node.status = step.type
-      }
+    // Handle complete step separately since it doesn't have a nodeId
+    if (step.type === 'complete') {
+      emit('complete', step);
+      isLoading.value = false;
+      return;
     }
 
+    // Get or create node
+    let node = findNode(tree.value, step.nodeId)
+    if (!node && step.type === 'generating_query') {
+      node = createNode(step.nodeId)
+    }
+    if (!node) {
+      console.error(`Node not found for step: ${step.type}, id: ${step.nodeId}`);
+      return;
+    }
+
+    // Update node status
+    node.status = step.type;
+    
+    // Handle classification if present
+    if (step.type === 'classified_content') {
+      console.log('[Classification] Received:', {
+        type: step.classification.type,
+        confidence: step.classification.confidence,
+        rawResponse: step.rawResponse
+      });
+      node.classification = {
+        type: step.classification.type,
+        confidence: step.classification.confidence,
+        metadata: step.classification.metadata,
+        rawResponse: step.rawResponse,
+      };
+      console.log('[Classification] Node updated:', {
+        nodeId: node.id,
+        classification: node.classification
+      });
+    }
+    
+    // Process other events
     switch (step.type) {
       case 'generating_query': {
-        if (!node) {
-          // Create new node
-          node = {
-            id: nodeId,
-            label: 'Generating...',
-            researchGoal: 'Generating research goal...',
-            learnings: [],
-            children: [],
-          }
-          const parentNodeId = getParentNodeId(nodeId)
-          // If direct child of root node
-          if (parentNodeId === '0') {
-            tree.value.children.push(node)
-            // If this is the first query (0-0), scroll to it
-            if (nodeId === '0-0') {
-              scrollToFirstQuery()
-            }
-          } else {
-            // Find parent node and add
-            const parentNode = findNode(
-              tree.value,
-              getParentNodeId(step.nodeId),
-            )
-            if (parentNode) {
-              parentNode.children.push(node)
-            }
-          }
-        }
         // Update node query content
         if (step.result) {
           node.label = step.result.query ?? 'Generating...'
@@ -101,6 +130,11 @@
         break
       }
 
+      case 'classifying_content': {
+        // No additional data to update
+        break
+      }
+
       case 'processing_serach_result': {
         if (node) {
           node.learnings = step.result.learnings || []
@@ -112,19 +146,14 @@
       case 'processed_search_result': {
         if (node) {
           node.learnings = step.result.learnings
-          searchResults.value[nodeId] = step.result
+          searchResults.value[step.nodeId] = step.result
         }
         break
       }
 
       case 'error':
-        console.error(`Research error on node ${nodeId}:`, step.message)
-        break
-
-      case 'complete':
-        emit('complete', step)
-        isLoading.value = false
-        break
+        console.error(`Research error on node ${step.nodeId}:`, step.message);
+        break;
     }
   }
 
@@ -144,11 +173,7 @@
   }
 
   function selectNode(node: TreeNode) {
-    if (selectedNode.value?.id === node.id) {
-      selectedNode.value = undefined
-    } else {
-      selectedNode.value = node
-    }
+    selectedNode.value = node // Always set the node, don't toggle
   }
 
   // Helper function: Get parent node ID
@@ -156,6 +181,22 @@
     const parts = nodeId.split('-')
     parts.pop()
     return parts.join('-')
+  }
+
+  // Scroll to first query without selecting it
+  function scrollToFirstQuery() {
+    if (tree.value.children.length > 0) {
+      const firstNode = tree.value.children[0]
+      nextTick(() => {
+        const element = document.querySelector(`[data-node-id="${firstNode.id}"]`)
+        if (element) {
+          element.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+          })
+        }
+      })
+    }
   }
 
   async function startResearch(query: string, depth: number, breadth: number) {
@@ -184,7 +225,7 @@
 </script>
 
 <template>
-  <UCard id="research-tree">
+  <UCard>
     <template #header>
       <h2 class="font-bold">3. Web Browsing</h2>
       <p class="text-sm text-gray-500">
@@ -200,30 +241,69 @@
       </div>
       <div v-if="selectedNode" class="p-4">
         <USeparator label="Node Details" />
-        <h2 class="text-xl font-bold mt-2">{{ selectedNode.label }}</h2>
+        
+        <!-- Classification details -->
+        <template v-if="selectedNode.classification">
+          <h2 class="text-xl font-bold mt-2">{{ selectedNode.classification.type === 'technical' ? 'Technical Analysis' : 'Content Analysis' }}</h2>
+          
+          <!-- Format the classification details as text -->
+          <div class="mt-4 space-y-2">
+            <div>
+              <span class="font-semibold">Type:</span> {{ selectedNode.classification.type }}
+              <span class="text-sm text-gray-500 ml-2">({{ selectedNode.classification.confidence }} confidence)</span>
+            </div>
+            
+            <div>
+              <span class="font-semibold">Content Type:</span> {{ selectedNode.classification.metadata.contentType || 'General Content' }}
+            </div>
+            
+            <div>
+              <span class="font-semibold">Target Audience:</span> {{ selectedNode.classification.metadata.audience || 'General Audience' }}
+            </div>
+            
+            <div v-if="selectedNode.classification.metadata.publishDate">
+              <span class="font-semibold">Published:</span> {{ selectedNode.classification.metadata.publishDate }}
+            </div>
+            
+            <div v-if="selectedNode.classification.metadata.lastUpdated">
+              <span class="font-semibold">Last Updated:</span> {{ selectedNode.classification.metadata.lastUpdated }}
+            </div>
+            
+            <div class="mt-4">
+              <span class="font-semibold">Content Distribution:</span>
+              <div class="ml-4 mt-1">
+                <div>Technical: {{ parsedClassification?.secondaryTypes?.technical }}%</div>
+                <div>Analysis: {{ parsedClassification?.secondaryTypes?.analysis }}%</div>
+              </div>
+            </div>
+          </div>
+        </template>
 
-        <!-- Root node has no additional information -->
-        <p v-if="selectedNode.id === '0'">
-          This is the beginning of your deep research journey!
-        </p>
+        <!-- Root node welcome message -->
+        <template v-else-if="selectedNode.id === '0'">
+          <h2 class="text-xl font-bold mt-2">Deep Research</h2>
+          <p>This is the beginning of your deep research journey!</p>
+        </template>
+
+        <!-- Regular node details (only show if not a classification node) -->
         <template v-else>
-          <h3 class="text-lg font-semibold mt-2">Research Goal:</h3>
+          <h2 class="text-xl font-bold mt-2">{{ selectedNode.label }}</h2>
+          
+          <h3 class="text-lg font-semibold mt-4">Research Goal:</h3>
           <p>{{ selectedNode.researchGoal }}</p>
 
-          <h3 class="text-lg font-semibold mt-2">Visited URLs:</h3>
+          <h3 class="text-lg font-semibold mt-4">Visited URLs:</h3>
           <ul class="list-disc list-inside">
             <li v-for="(url, index) in selectedNode.visitedUrls" :key="index">
               <ULink :href="url" target="_blank">{{ url }}</ULink>
             </li>
           </ul>
 
-          <h3 class="text-lg font-semibold mt-2">Learnings:</h3>
+          <h3 class="text-lg font-semibold mt-4">Learnings:</h3>
           <ul class="list-disc list-inside">
-            <li
-              v-for="(learning, index) in selectedNode.learnings"
-              :key="index"
-              >{{ learning }}</li
-            >
+            <li v-for="(learning, index) in selectedNode.learnings" :key="index">
+              {{ learning }}
+            </li>
           </ul>
         </template>
       </div>

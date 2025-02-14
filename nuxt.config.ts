@@ -1,12 +1,7 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
-import { resolve } from 'path'
-import { eventHandler } from 'h3'
 export default defineNuxtConfig({
   runtimeConfig: {
     public: {
-      // Development Mode
-      dev: process.env.NODE_ENV !== 'production',
-      
       // AI Provider Settings
       openaiKey: process.env.OPENAI_KEY || '',
       openaiEndpoint: process.env.OPENAI_ENDPOINT || 'https://api.openai.com/v1',
@@ -57,43 +52,12 @@ export default defineNuxtConfig({
     host: '0.0.0.0',
   },
 
-  // Auto-import directories
+  // Add auto-import directories
   imports: {
     dirs: [
       'composables',
       'research-methods',
       'research-methods/methods'
     ]
-  },
-
-  // Configure aliases
-  alias: {
-    'research-methods': resolve(__dirname, './research-methods')
-  },
-
-  // Router configuration
-  router: {
-    options: {
-      strict: false
-    }
-  },
-
-  // Static asset handling
-  app: {
-    baseURL: '/',
-    buildAssetsDir: '/_nuxt/',
-  },
-
-  // Nitro server configuration
-  nitro: {
-    preset: 'node-server',
-    logLevel: 'debug',
-    routeRules: {
-      '/_nuxt/**': {
-        headers: {
-          'cache-control': 'public, max-age=2592000'
-        }
-      }
-    }
   },
 })

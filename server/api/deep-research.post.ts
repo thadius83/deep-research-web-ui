@@ -102,7 +102,7 @@ ${feedback.map((qa: { question: string; answer: string }) => `Q: ${qa.question}\
       }
 
       // Get method-specific prompts
-      const prompts = getResearchPrompts(methodId, context);
+      const prompts = await getResearchPrompts(methodId, context);
 
       if (config.isDev) {
         console.log('[Research] Using method:', {

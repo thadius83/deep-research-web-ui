@@ -12,6 +12,15 @@ export type TreeNode = {
   followUpQuestions?: string[]
   visitedUrls?: string[]
   status?: TreeNodeStatus
+  classification?: {
+    type: 'technical' | 'analysis'
+    confidence: 'high' | 'medium' | 'low'
+    metadata: {
+      contentType?: string
+      audience?: string
+    }
+    rawResponse?: string
+  }
   children: TreeNode[]
 }
 
@@ -42,6 +51,15 @@ const icon = computed(() => {
     case 'search_complete':
       result.name = 'i-lucide-search-check'
       break
+    case 'classifying_content':
+      result.name = 'i-lucide-filter'
+      result.pulse = true
+      break
+    case 'classified_content':
+      result.name = props.node.classification?.type === 'technical' 
+        ? 'i-lucide-code-2' 
+        : 'i-lucide-book-open'
+      break
     case 'processing_serach_result':
       result.name = 'i-lucide-brain'
       result.pulse = true
@@ -55,22 +73,31 @@ const icon = computed(() => {
   }
   return result
 })
+
+function selectNode(node: TreeNode) {
+  selectedNode.value = node // Always set the node, don't toggle
+}
 </script>
 
 <template>
   <div class="flex items-center gap-1">
     <UIcon name="i-lucide-circle-dot" />
-    <UButton
-      :class="icon.pulse && 'animate-pulse'"
-      :icon="icon.name"
-      size="sm"
-      :color="selectedNode?.id === node.id ? 'primary' : 'info'"
-      :variant="selectedNode?.id === node.id ? 'soft' : 'outline'"
-      @click="emit('select', node)"
-      :data-node-id="node.id"
-    >
-      {{ node.label }}
-    </UButton>
+    <div class="flex items-center gap-1">
+      <UButton
+        :class="icon.pulse && 'animate-pulse'"
+        :icon="icon.name"
+        size="sm"
+        :color="selectedNode?.id === node.id ? 'primary' : 'info'"
+        :variant="selectedNode?.id === node.id ? 'soft' : 'outline'"
+        @click="emit('select', node)"
+        :data-node-id="node.id"
+      >
+        {{ node.label }}
+      </UButton>
+      <UBadge v-if="node.classification" class="capitalize cursor-pointer" @click="emit('select', node)">
+        {{ node.classification.type }}
+      </UBadge>
+    </div>
     <ol v-if="node.children.length > 0" class="space-y-2">
       <li v-for="node in node.children" :key="node.id">
         <Tree

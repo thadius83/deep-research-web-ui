@@ -45,16 +45,14 @@ export interface FirecrawlResponse {
 export function useFirecrawl() {
   const config = getConfig()
   
-  if (config.webSearch.provider !== 'firecrawl') {
-    throw new Error('Firecrawl is not configured as the current search provider')
-  }
-
-  if (!config.webSearch.apiBase) {
-    throw new Error('Firecrawl API base URL is not configured')
-  }
-
-  if (!config.webSearch.apiKey) {
-    throw new Error('Firecrawl API key is not configured')
+  // Only check provider and base URL upfront
+  const requireConfig = (operation: 'search' | 'scrape') => {
+    if (operation === 'search' && config.webSearch.provider !== 'firecrawl') {
+      throw new Error('Firecrawl is not configured as the current search provider')
+    }
+    if (!config.webSearch.apiBase) {
+      throw new Error('Firecrawl API base URL is not configured')
+    }
   }
 
   // Ensure base URL doesn't end with a slash and doesn't include /v1
@@ -74,6 +72,16 @@ export function useFirecrawl() {
           'Authorization': 'Bearer [hidden]'
         }
       })
+
+      // Check API key only when making the request
+      if (!config.webSearch.apiKey) {
+        console.warn('Firecrawl API key is not configured, returning empty response');
+        return {
+          success: false,
+          data: [],
+          error: 'Firecrawl API key is not configured'
+        };
+      }
 
       const response = await fetch(requestUrl, {
         method: 'POST',
@@ -118,6 +126,7 @@ export function useFirecrawl() {
 
   return {
     async search(query: string, params: FirecrawlSearchParams = {}): Promise<FirecrawlResponse> {
+      requireConfig('search')
       console.log('Making Firecrawl search request:', query)
       return makeRequest('search', {
         query,
@@ -133,6 +142,7 @@ export function useFirecrawl() {
     },
 
     async scrape(url: string, params: FirecrawlScrapeParams = {}): Promise<FirecrawlResponse> {
+      requireConfig('scrape')
       console.log('Making Firecrawl scrape request:', {
         url,
         params

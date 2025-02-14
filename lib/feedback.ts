@@ -11,16 +11,17 @@ export const feedbackTypeSchema = z.object({
   questions: z.array(z.string()).optional(),
 })
 
-export async function generateFeedback({
+export async function* generateFeedback({
   query,
   numQuestions = 3,
 }: {
   query: string
   numQuestions?: number
-}): Promise<string[]> {
-  // If numQuestions is 0, return empty array immediately
+}) {
+  // If numQuestions is 0, yield empty array immediately
   if (numQuestions === 0) {
-    return [];
+    yield { questions: [] };
+    return;
   }
 
   const schema = z.object({
@@ -40,15 +41,13 @@ export async function generateFeedback({
     prompt,
   })
 
-  let questions: string[] = [];
   for await (const value of parseStreamingJson(
     stream.textStream,
     feedbackTypeSchema,
     (value: PartialFeedback) => !!value.questions && value.questions.length > 0
   )) {
     if (value.questions) {
-      questions = value.questions;
+      yield { questions: value.questions };
     }
   }
-  return questions;
 }

@@ -2,7 +2,7 @@ import { getMethodById } from '~/research-methods';
 import type { ResearchContext } from '~/research-methods/types';
 import { getConfig } from './server-config';
 
-export function getResearchPrompts(methodId: string, context: ResearchContext) {
+export async function getResearchPrompts(methodId: string, context: ResearchContext) {
   const method = getMethodById(methodId);
   
   const config = getConfig();
@@ -23,7 +23,7 @@ export function getResearchPrompts(methodId: string, context: ResearchContext) {
     console.groupEnd();
   }
 
-  const mainPrompt = method.formatInput(context);
+  const mainPrompt = await method.formatInput(context);
   const followUpTemplate = method.followUpTemplate;
   const learningTemplate = method.learningTemplate;
 

@@ -39,6 +39,7 @@
 </template>
 
 <script setup lang="ts">
+  import { useConfigStore } from '~/stores/config'
   import type ResearchForm from '~/components/ResearchForm.vue'
   import type ResearchFeedback from '~/components/ResearchFeedback.vue'
   import type DeepResearch from '~/components/DeepResearch.vue'
@@ -47,6 +48,8 @@
   import type { ResearchFeedbackResult } from '~/components/ResearchFeedback.vue'
   import type { ResearchResult } from '~/lib/deep-research'
   import ConfigManager from '~/components/ConfigManager.vue'
+  import ColorModeButton from '~/components/ColorModeButton.vue'
+  import GitHubButton from '~/components/GitHubButton.vue'
 
   const config = useConfigStore()
   const toast = useToast()

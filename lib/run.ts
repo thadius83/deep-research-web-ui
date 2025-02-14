@@ -40,9 +40,12 @@ async function run() {
   console.log(`Creating research plan...`)
 
   // Generate follow-up questions
-  const followUpQuestions = await generateFeedback({
+  let questions: string[] = []
+  for await (const feedback of generateFeedback({
     query: initialQuery,
-  })
+  })) {
+    questions = feedback.questions
+  }
 
   console.log(
     '\nTo better understand your research needs, please answer these follow-up questions:',
@@ -50,7 +53,7 @@ async function run() {
 
   // Collect answers to follow-up questions
   const answers: string[] = []
-  for (const question of followUpQuestions) {
+  for (const question of questions) {
     const answer = await askQuestion(`\n${question}\nYour answer: `)
     answers.push(answer)
   }
@@ -59,7 +62,7 @@ async function run() {
   const combinedQuery = `
 Initial Query: ${initialQuery}
 Follow-up Questions and Answers:
-${followUpQuestions.map((q, i) => `Q: ${q}\nA: ${answers[i]}`).join('\n')}
+${questions.map((q, i) => `Q: ${q}\nA: ${answers[i]}`).join('\n')}
 `
 
   console.log('\nResearching your topic...')
@@ -67,7 +70,10 @@ ${followUpQuestions.map((q, i) => `Q: ${q}\nA: ${answers[i]}`).join('\n')}
   const { learnings, visitedUrls } = await deepResearch({
     query: combinedQuery,
     breadth,
-    depth,
+    maxDepth: depth,
+    onProgress: (step) => {
+      // Optional: Add progress logging here if needed
+    }
   })
 
   console.log(`\n\nLearnings:\n\n${learnings.join('\n')}`)
@@ -79,7 +85,9 @@ ${followUpQuestions.map((q, i) => `Q: ${q}\nA: ${answers[i]}`).join('\n')}
   const report = await writeFinalReport({
     prompt: combinedQuery,
     learnings,
+    methodId: 'deep-research', // Use deep-research method by default
     visitedUrls,
+    currentDate: new Date().toISOString()
   })
 
   // Save report to file

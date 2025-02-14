@@ -7,6 +7,7 @@ import { type TavilySearchResponse } from '@tavily/core'
 import { type SearchResponse as FirecrawlSearchResponse } from '@mendable/firecrawl-js'
 import { logger } from '../utils/logger'
 import type { FirecrawlResponse, FirecrawlResult } from '~/server/utils/firecrawl-client'
+import type { ResearchContext } from '~/research-methods/types'
 import { parseStreamingJson, type DeepPartial } from '~/utils/json'
 import { trimPrompt } from './ai/providers'
 import { systemPrompt } from './prompt'
@@ -72,6 +73,20 @@ export type ResearchStep =
   | { type: 'generated_query'; query: string; result: PartialSearchQuery; nodeId: string }
   | { type: 'searching'; query: string; nodeId: string }
   | { type: 'search_complete'; urls: string[]; nodeId: string }
+  | { type: 'classifying_content'; query: string; nodeId: string }
+  | { type: 'classified_content'; 
+      query: string; 
+      nodeId: string;
+      classification: {
+        type: 'technical' | 'analysis';
+        confidence: 'high' | 'medium' | 'low';
+        metadata: {
+          contentType?: string;
+          audience?: string;
+        }
+      }
+      rawResponse: string;
+    }
   | { type: 'processing_serach_result'; query: string; result: PartialProcessedResult; nodeId: string }
   | { type: 'processed_search_result'; query: string; result: ProcessedSearchResult; nodeId: string }
   | { type: 'error'; message: string; nodeId: string }
@@ -189,7 +204,7 @@ function processSearchResult({
   })
 }
 
-export function writeFinalReport({
+export async function writeFinalReport({
   prompt,
   learnings,
   methodId,
@@ -203,23 +218,34 @@ export function writeFinalReport({
     300_000,
   )
 
+  const context: ResearchContext = {
+    query: prompt,
+    searchResults: [],
+    sources: [],
+    currentDate,
+    learnings,
+  };
+
+  const formattedPrompt = await method.formatInput(context);
+
   const _prompt = [
     `Given the following prompt from the user, write a final report following the specific format for this research method:`,
     `<prompt>${prompt}</prompt>`,
     `Here are all the learnings from the research:`,
     `<learnings>\n${learningsString}\n</learnings>`,
-    method.promptTemplate,
+    formattedPrompt,
     `Write the report in Markdown following this method's specific structure and requirements.`,
     `## Deep Research Report`,
   ].join('\n\n')
 
-  logger.debug(`[Final Report Generation] Method ID: ${methodId}, Using method template: ${method.promptTemplate}, User prompt: ${prompt}, Number of learnings: ${learnings.length}`);
+  logger.debug(`[Final Report Generation] Method ID: ${methodId}, User prompt: ${prompt}, Number of learnings: ${learnings.length}`);
 
-  return streamText({
+  const response = await streamText({
     model: useAiModel(),
     system: systemPrompt(),
     prompt: _prompt,
   })
+  return response.textStream
 }
 
 function childNodeId(parentNodeId: string, currentIndex: number) {
@@ -277,6 +303,34 @@ export async function deepResearch({
             }
           })))
         }
+
+        // Classify content before processing
+        onProgress({
+          type: 'classifying_content',
+          query: isMultiUrlQuery(query) ? 'Multi-URL Analysis' : urls[0],
+          nodeId,
+        })
+
+        const method = getMethodById('extract-info') as ExtractInfoMethod;
+        const classificationResult = await method.classifyContent(
+          isMultiUrlQuery(query) ? 'Multi-URL Analysis' : urls[0],
+          combinedResult.data.map(item => item.markdown).join('\n\n')
+        );
+
+        onProgress({
+          type: 'classified_content',
+          query: isMultiUrlQuery(query) ? 'Multi-URL Analysis' : urls[0],
+          nodeId,
+          classification: {
+            type: classificationResult.primaryType,
+            confidence: classificationResult.confidence,
+            metadata: {
+              contentType: classificationResult.metadata.contentType,
+              audience: classificationResult.metadata.audience,
+            }
+          },
+          rawResponse: JSON.stringify(classificationResult, null, 2)
+        });
 
         // Process combined results
         const searchResultGenerator = processSearchResult({
@@ -409,6 +463,31 @@ export async function deepResearch({
               type: 'search_complete',
               urls: newUrls,
               nodeId: childNodeId(nodeId, i),
+            })
+
+            // Classify content before processing
+            onProgress({
+              type: 'classifying_content',
+              query: searchQuery.query,
+              nodeId: childNodeId(nodeId, i),
+            })
+
+            const method = getMethodById('extract-info') as ExtractInfoMethod;
+            const classificationResult = await method.classifyContent(searchQuery.query, result.data.map(item => item.markdown).join('\n\n'));
+
+            onProgress({
+              type: 'classified_content',
+              query: searchQuery.query,
+              nodeId: childNodeId(nodeId, i),
+              classification: {
+                type: classificationResult.primaryType,
+                confidence: classificationResult.confidence,
+                metadata: {
+                  contentType: classificationResult.metadata.contentType,
+                  audience: classificationResult.metadata.audience,
+                }
+              },
+              rawResponse: JSON.stringify(classificationResult, null, 2)
             })
 
             // Breadth for the next search is half of the current breadth

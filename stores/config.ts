@@ -33,7 +33,7 @@ export const useConfigStore = defineStore('config', () => {
     },
     webSearch: {
       provider: 'firecrawl',
-      apiBase: 'https://api.firecrawl.dev/v1',
+      apiBase: '', // Empty by default, will be set from env or server config
     },
   }
 

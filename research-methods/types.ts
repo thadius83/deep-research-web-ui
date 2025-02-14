@@ -60,7 +60,7 @@ export interface ResearchMethod {
   promptTemplate: string;
   followUpTemplate: string;
   learningTemplate: string;
-  formatInput: (context: ResearchContext) => string;
+  formatInput: (context: ResearchContext) => string | Promise<string>;
   parseOutput: (response: string) => MethodOutput;
   validateOutput: (output: MethodOutput) => boolean;
 }
@@ -73,7 +73,7 @@ export abstract class BaseResearchMethod implements ResearchMethod {
   abstract followUpTemplate: string;
   abstract learningTemplate: string;
 
-  formatInput(context: ResearchContext): string {
+  async formatInput(context: ResearchContext): Promise<string> {
     let input = this.promptTemplate;
     input = input.replace('{{query}}', context.query);
     input = input.replace('{{searchResults}}', context.searchResults.join('\n\n'));

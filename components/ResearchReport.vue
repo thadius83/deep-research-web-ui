@@ -25,7 +25,8 @@
     error.value = ''
     reportContent.value = ''
     try {
-      for await (const chunk of writeFinalReport(params).textStream) {
+      const textStream = await writeFinalReport(params)
+      for await (const chunk of textStream) {
         reportContent.value += chunk
       }
       reportContent.value += `\n\n## Sources\n\n${params.visitedUrls

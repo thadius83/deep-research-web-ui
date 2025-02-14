@@ -4,10 +4,12 @@ import type {
   SourceReference, 
   ContentStructure, 
   CodeBlock, 
-  SourceMetadata 
+  SourceMetadata,
+  ResearchContext
 } from '../types';
 import { useClassify } from '../../composables/useClassify';
-interface ContentMetadata {
+import { useProcessContent } from '../../composables/useProcessContent';
+export interface ContentMetadata {
   publishDate?: string;
   lastUpdated?: string;
   contentType?: string;
@@ -18,12 +20,12 @@ interface ContentMetadata {
   };
 }
 
-enum ContentType {
+export enum ContentType {
   Technical = 'technical',
   Analysis = 'analysis'
 }
 
-interface ClassificationResult {
+export interface ClassificationResult {
   primaryType: ContentType;
   confidence: 'high' | 'medium' | 'low';
   secondaryTypes: { [type in ContentType]?: number };
@@ -100,9 +102,9 @@ export class ExtractInfoMethod extends BaseResearchMethod {
   private classify = useClassify();
   private processContent = useProcessContent();
 
-  override formatInput(context: ResearchContext): string {
+  override async formatInput(context: ResearchContext): Promise<string> {
     // Use the base implementation for template variable replacement
-    let input = super.formatInput(context);
+    let input = await super.formatInput(context);
 
     // Add any additional formatting specific to this method
     return input;
@@ -142,7 +144,7 @@ export class ExtractInfoMethod extends BaseResearchMethod {
       `);
     } catch (error) {
       console.error('Error processing input:', error);
-      return this.formatInput(context);
+      return await this.formatInput(context);
     }
   }
 
@@ -178,7 +180,12 @@ export class ExtractInfoMethod extends BaseResearchMethod {
     Target Audience: [identify intended readers]
   `;
 
-  private async classifyContent(query: string, searchResults: string): Promise<ClassificationResult> {
+  async classifyContent(query: string, searchResults: string): Promise<ClassificationResult> {
+    console.log('[ExtractInfo] Starting content classification:', {
+      queryLength: query.length,
+      resultsLength: searchResults.length
+    });
+    
     // Get classification from server
     const response = await this.classify.classify({
       query,
@@ -187,8 +194,11 @@ export class ExtractInfoMethod extends BaseResearchMethod {
       systemPrompt: 'You are an expert content classifier and information extractor.',
     });
 
+    console.log('[ExtractInfo] Raw classification response:', response);
+
     // Parse the response
     const sections = response.split(/\n(?=##\s+[A-Za-z][A-Za-z\s]*\n)/);
+    console.log('[ExtractInfo] Found sections:', sections.map(s => s.split('\n')[0]?.trim()));
     const classification: ClassificationResult = {
       primaryType: ContentType.Analysis, // Default
       confidence: 'low',
@@ -201,6 +211,7 @@ export class ExtractInfoMethod extends BaseResearchMethod {
       }
     };
 
+    console.log('[ExtractInfo] Starting section parsing');
     sections.forEach((section: string) => {
       const titleMatch = section.match(/^##\s+([A-Za-z][A-Za-z\s]*)\n/);
       if (titleMatch) {
@@ -211,6 +222,9 @@ export class ExtractInfoMethod extends BaseResearchMethod {
           // Extract primary type and confidence
           const primaryMatch = content.match(/Primary Type:\s*(\w+)/);
           const confidenceMatch = content.match(/Confidence:\s*(high|medium|low)/i);
+          
+          console.log('[ExtractInfo] Primary type match:', primaryMatch?.[1]);
+          console.log('[ExtractInfo] Confidence match:', confidenceMatch?.[1]);
           
           if (primaryMatch && primaryMatch[1]) {
             classification.primaryType = primaryMatch[1].toLowerCase() as ContentType;
@@ -251,6 +265,7 @@ export class ExtractInfoMethod extends BaseResearchMethod {
       }
     });
 
+    console.log('[ExtractInfo] Final classification result:', classification);
     return classification;
   }
 

@@ -14,20 +14,20 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
+    logger.debug('[Classify] Starting classification:', {
+      query,
+      contentLength: content?.length || 0,
+      templateLength: template.length,
+      hasSystemPrompt: !!systemPrompt
+    });
+
     // Format the classification prompt
     const prompt = template
       .replace('{{query}}', query)
       .replace('{{searchResults}}', content || '')
       .replace('{{currentDate}}', new Date().toISOString())
 
-    if (config.isDev) {
-      logger.debug('[Classify] Request:', {
-        query,
-        contentLength: content?.length || 0,
-        templateLength: template.length,
-        hasSystemPrompt: !!systemPrompt
-      })
-    }
+    logger.debug('[Classify] Formatted prompt:', prompt);
 
     // Get classification from LLM
     const aiClient = useAiClient()
@@ -41,8 +41,14 @@ export default defineEventHandler(async (event) => {
       response += chunk
     }
 
-    if (config.isDev) {
-      logger.debug('[Classify] Response:', response)
+    logger.debug('[Classify] Raw response:', response);
+
+    // Try to parse the response to verify format
+    try {
+      const sections = response.split(/\n(?=##\s+[A-Za-z][A-Za-z\s]*\n)/);
+      logger.debug('[Classify] Parsed sections:', sections.map(s => s.split('\n')[0]?.trim()));
+    } catch (parseError) {
+      logger.error('[Classify] Failed to parse response:', parseError);
     }
 
     return { response }
