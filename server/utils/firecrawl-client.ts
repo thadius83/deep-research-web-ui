@@ -26,6 +26,12 @@ export interface FirecrawlResult {
     title?: string
     description?: string
     sourceURL?: string
+    author?: string
+    publishDate?: string
+    lastModified?: string
+    language?: string
+    contentType?: string
+    mainHeadings?: string[]
   }
   actions: any[]
 }

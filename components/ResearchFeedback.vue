@@ -10,7 +10,7 @@
     isLoadingSearch?: boolean
   }>()
 
-  defineEmits<{
+  const emit = defineEmits<{
     (e: 'submit', feedback: ResearchFeedbackResult[]): void
   }>()
 
@@ -34,6 +34,12 @@
     clear()
     isLoading.value = true
     try {
+      // If numQuestions is 0, proceed directly with research
+      if (numQuestions === 0) {
+        emit('submit', [])
+        return
+      }
+
       for await (const f of generateFeedback({
         query,
         numQuestions,
@@ -76,7 +82,9 @@
     <template #header>
       <h2 class="font-bold">2. Model Feedback</h2>
       <p class="text-sm text-gray-500">
-        The AI will ask follow-up questions to help clarify and refine your research direction.
+        {{ feedback.length > 0 
+          ? 'The AI will ask follow-up questions to help clarify and refine your research direction.'
+          : 'Ready to proceed with research.' }}
       </p>
     </template>
 

@@ -2,17 +2,21 @@ import { streamText } from 'ai'
 import { compact } from 'lodash-es'
 import pLimit from 'p-limit'
 import { z } from 'zod'
-import { logger } from '../utils/logger'
-import { parseStreamingJson, type DeepPartial } from '~/utils/json'
-import { trimPrompt } from './ai/providers'
-import { systemPrompt } from './prompt'
 import zodToJsonSchema from 'zod-to-json-schema'
 import { type TavilySearchResponse } from '@tavily/core'
 import { type SearchResponse as FirecrawlSearchResponse } from '@mendable/firecrawl-js'
+import { logger } from '../utils/logger'
+import type { FirecrawlResponse, FirecrawlResult } from '~/server/utils/firecrawl-client'
+import { parseStreamingJson, type DeepPartial } from '~/utils/json'
+import { trimPrompt } from './ai/providers'
+import { systemPrompt } from './prompt'
 import { useServerSearch } from '~/composables/useServerSearch'
 import { useConfigStore } from '~/stores/config'
 import { useAiModel } from '~/composables/useAiProvider'
 import { getMethodById } from '~/research-methods'
+import { ExtractInfoMethod } from '~/research-methods/methods/extract-info'
+import { isUrlQuery, extractUrls, isMultiUrlQuery } from '~/utils/url'
+import { scrapeUrlContent } from '~/server/utils/url-scraper'
 
 export type ResearchResult = {
   learnings: string[]
@@ -30,8 +34,6 @@ export interface WriteFinalReportParams {
 // Used for streaming response
 export type SearchQuery = z.infer<typeof searchQueriesTypeSchema>['queries'][0]
 export type PartialSearchQuery = DeepPartial<SearchQuery>
-
-import type { FirecrawlResponse } from '~/server/utils/firecrawl-client'
 
 interface TavilyResult {
   url: string
@@ -159,15 +161,19 @@ function processSearchResult({
       ),
   })
   const jsonSchema = JSON.stringify(zodToJsonSchema(schema))
-  const contents = compact(
-    'results' in result
-      ? result.results.map((item) => item.content)
-      : result.data.map((item) => item.markdown)
-  ).map((content) => trimPrompt(content, 50_000))
+
+  // Extract content safely with type checking
+  const contents = isTavilyResponse(result)
+    ? compact(result.results.map(item => item.content))
+    : isFirecrawlResponse(result)
+      ? compact(result.data.map(item => item.markdown))
+      : []
+
+  const trimmedContents = contents.map(content => trimPrompt(content, 50_000))
 
   const prompt = [
     `Given the following contents from a SERP search for the query <query>${query}</query>, generate a list of learnings from the contents. Return a maximum of ${numLearnings} learnings, but feel free to return less if the contents are clear. Make sure each learning is unique and not similar to each other. The learnings should be concise and to the point, as detailed and information dense as possible. Make sure to include any entities like people, places, companies, products, things, etc in the learnings, as well as any exact metrics, numbers, or dates. The learnings will be used to research the topic further.`,
-    `<contents>${contents
+    `<contents>${trimmedContents
       .map((content) => `<content>\n${content}\n</content>`)
       .join('\n')}</contents>`,
     `You MUST respond in JSON with the following schema: ${jsonSchema}`,
@@ -220,8 +226,6 @@ function childNodeId(parentNodeId: string, currentIndex: number) {
   return `${parentNodeId}-${currentIndex}`
 }
 
-import { isUrlQuery, extractUrl } from '../utils/url'
-
 export async function deepResearch({
   query,
   breadth,
@@ -242,26 +246,42 @@ export async function deepResearch({
   nodeId?: string
 }): Promise<ResearchResult> {
   try {
-    // Check if query is a URL
+    // Check if query contains URLs
     if (isUrlQuery(query)) {
-      const url = extractUrl(query)
-      if (url) {
-        logger.debug(`[Research] Direct URL scraping: ${url}`)
+      const urls = extractUrls(query)
+      if (urls.length > 0) {
+        logger.debug(`[Research] Direct URL scraping: ${urls.join(', ')}`)
         const search = useServerSearch()
         
-        // Use scrapeUrlContent directly
-        const result = await scrapeUrlContent(url, {
-          formats: ['markdown'],
-          onlyMainContent: true,
-          waitFor: 3000,
-          removeBase64Images: true,
-          timeout: 30000
-        })
+        // Scrape all URLs in parallel
+        const scrapeResults = await Promise.all(
+          urls.map(url => 
+            scrapeUrlContent(url, {
+              formats: ['markdown'],
+              onlyMainContent: true,
+              waitFor: 3000,
+              removeBase64Images: true,
+              timeout: 30000
+            })
+          )
+        )
 
-        // Process just the single URL result
+        // Combine results and preserve metadata
+        const combinedResult: FirecrawlResponse = {
+          success: true,
+          data: scrapeResults.flatMap(result => result.data.map(item => ({
+            ...item,
+            metadata: {
+              ...item.metadata,
+              sourceURL: item.url // Ensure sourceURL is set for metadata tracking
+            }
+          })))
+        }
+
+        // Process combined results
         const searchResultGenerator = processSearchResult({
-          query: url,
-          result,
+          query: isMultiUrlQuery(query) ? 'Multi-URL Analysis' : urls[0],
+          result: combinedResult,
           numFollowUpQuestions: 0, // No follow-up questions for direct URLs
         })
 
@@ -277,12 +297,12 @@ export async function deepResearch({
         onProgress({
           type: 'complete',
           learnings: searchResult.learnings || [],
-          visitedUrls: [url]
+          visitedUrls: urls
         })
 
         return {
           learnings: searchResult.learnings || [],
-          visitedUrls: [url]
+          visitedUrls: urls
         }
       }
     }
@@ -363,7 +383,9 @@ export async function deepResearch({
                     metadata: {
                       title: item.title || '',
                       description: '',  // Tavily doesn't provide snippets
-                      sourceURL: item.url || ''
+                      sourceURL: item.url || '',
+                      contentType: 'article', // Default for Tavily results
+                      language: 'en' // Default language
                     },
                     actions: []
                   }))
@@ -376,11 +398,12 @@ export async function deepResearch({
                     error: 'Invalid response format'
                   }
 
-            const newUrls = compact(
-              isTavilyResponse(searchResponse)
-                ? searchResponse.results.map(item => item.url)
-                : searchResponse.data.map(item => item.url)
-            ).filter(Boolean)
+            // Extract URLs safely with type checking
+            const newUrls = isTavilyResponse(searchResponse)
+              ? compact(searchResponse.results.map(item => item.url))
+              : isFirecrawlResponse(searchResponse)
+                ? compact(searchResponse.data.map(item => item.url))
+                : []
 
             onProgress({
               type: 'search_complete',

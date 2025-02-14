@@ -3,35 +3,42 @@
  */
 
 /**
- * Extracts a URL from a query string that may contain site: prefix
- * @param query The query string that may contain a URL
- * @returns The extracted URL if found, null otherwise
+ * Validates and normalizes a URL string
+ * @param urlStr The URL string to validate
+ * @returns The normalized URL if valid, null otherwise
  */
-export function extractUrl(query: string): string | null {
+function validateUrl(urlStr: string): string | null {
   // Remove whitespace
-  query = query.trim()
+  urlStr = urlStr.trim()
 
   // Handle site: prefix
-  if (query.startsWith('site:')) {
-    query = query.substring(5).trim()
+  if (urlStr.startsWith('site:')) {
+    urlStr = urlStr.substring(5).trim()
   }
 
   // Basic URL validation
   try {
-    const url = new URL(query)
+    const url = new URL(urlStr)
     // Only allow http/https protocols
     if (url.protocol === 'http:' || url.protocol === 'https:') {
-      return url.toString()
+      // Additional validation: require at least one dot in hostname
+      // This prevents things like "artificial" becoming "https://artificial/"
+      if (url.hostname.includes('.')) {
+        return url.toString()
+      }
     }
   } catch {
     // Not a valid URL
   }
 
-  // Try adding https:// if no protocol
-  if (!query.includes('://')) {
+  // Try adding https:// if no protocol and contains a dot
+  if (!urlStr.includes('://') && urlStr.includes('.')) {
     try {
-      const url = new URL('https://' + query)
-      return url.toString()
+      const url = new URL('https://' + urlStr)
+      // Additional validation: require at least one dot in hostname
+      if (url.hostname.includes('.')) {
+        return url.toString()
+      }
     } catch {
       // Not a valid URL
     }
@@ -41,10 +48,47 @@ export function extractUrl(query: string): string | null {
 }
 
 /**
- * Checks if a query string contains a URL
+ * Extracts URLs from a query string that may contain multiple URLs
+ * @param query The query string that may contain URLs
+ * @returns Array of extracted URLs
+ */
+export function extractUrls(query: string): string[] {
+  // Split query by common delimiters
+  const parts = query.split(/[\n,\s]+/)
+  
+  // Extract and validate URLs
+  const urls = parts
+    .map(part => validateUrl(part))
+    .filter((url): url is string => url !== null)
+
+  return [...new Set(urls)] // Remove duplicates
+}
+
+/**
+ * Extracts a single URL from a query string
+ * @param query The query string that may contain a URL
+ * @returns The extracted URL if found, null otherwise
+ * @deprecated Use extractUrls instead for better multi-URL support
+ */
+export function extractUrl(query: string): string | null {
+  const urls = extractUrls(query)
+  return urls.length > 0 ? urls[0] : null
+}
+
+/**
+ * Checks if a query string contains any URLs
  * @param query The query string to check
- * @returns True if the query contains a URL
+ * @returns True if the query contains at least one URL
  */
 export function isUrlQuery(query: string): boolean {
-  return extractUrl(query) !== null
+  return extractUrls(query).length > 0
+}
+
+/**
+ * Checks if a query string contains multiple URLs
+ * @param query The query string to check
+ * @returns True if the query contains more than one URL
+ */
+export function isMultiUrlQuery(query: string): boolean {
+  return extractUrls(query).length > 1
 }

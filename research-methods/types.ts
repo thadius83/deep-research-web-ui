@@ -1,8 +1,35 @@
+export interface SourceMetadata {
+  title?: string;
+  description?: string;
+  sourceURL?: string;
+  author?: string;
+  publishDate?: string;
+  lastModified?: string;
+  language?: string;
+  contentType?: string;
+  mainHeadings?: string[];
+}
+
 export interface SourceReference {
   url: string;
   title: string;
   snippet: string;
   timestamp: string;
+  metadata?: SourceMetadata;
+}
+
+export interface CodeBlock {
+  language: string;
+  code: string;
+}
+
+export interface ContentStructure {
+  headings?: string[];
+  sections?: { [key: string]: string };
+  lists?: string[][];
+  tables?: string[][][];
+  codeBlocks?: CodeBlock[];
+  subsections?: string[];
 }
 
 export interface ResearchContext {
@@ -17,6 +44,7 @@ export interface MethodOutputSection {
   content: string | string[];
   format: 'list' | 'table' | 'text';
   sourceRefs: SourceReference[];
+  structure?: ContentStructure;
 }
 
 export interface MethodOutput {

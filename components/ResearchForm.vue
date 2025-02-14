@@ -117,7 +117,7 @@
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <UFormField label="Number of Questions" required>
-          <template #help> Number of clarifying questions to refine the research scope (0 for direct research). </template>
+          <template #help> Number of clarifying questions to refine the research scope (set to 0 to skip questions and proceed directly with research). </template>
           <UInput
             v-model="form.numQuestions"
             class="w-full"

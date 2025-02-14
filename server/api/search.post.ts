@@ -12,7 +12,8 @@ export default defineEventHandler(async (event) => {
     // Check if query is a URL
     if (isUrlQuery(query)) {
       const url = extractUrl(query)
-      if (url) {
+      // Additional validation to prevent treating search terms as URLs
+      if (url && url.includes('.') && /^https?:\/\/[^\/]+\.[^\/]+/.test(url)) {
         console.log('Detected URL in query, using direct scraping:', url)
         // Transform search params to scrape params
         const scrapeParams = {
@@ -51,10 +52,10 @@ export default defineEventHandler(async (event) => {
       timeout: params?.timeout || 15000,
       limit: params?.limit || 5,
       scrapeOptions: {
-        formats: params?.formats || ['markdown'],
-        onlyMainContent: params?.onlyMainContent ?? true,
-        waitFor: params?.waitFor || 3000,
-        removeBase64Images: params?.removeBase64Images ?? true,
+        formats: params?.scrapeOptions?.formats || ['markdown'],
+        onlyMainContent: params?.scrapeOptions?.onlyMainContent ?? true,
+        waitFor: params?.scrapeOptions?.waitFor || 3000,
+        removeBase64Images: params?.scrapeOptions?.removeBase64Images ?? true
       }
     })
     console.log(`[Firecrawl] Ran "${query}", found ${result.data.length} contents`)

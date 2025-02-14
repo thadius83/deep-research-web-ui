@@ -43,7 +43,13 @@ export async function scrapeUrlContent(url: string, params?: FirecrawlScrapePara
         metadata: {
           title: ensureString(result.data[0].metadata?.title, url),
           description: ensureString(result.data[0].metadata?.description, ''),
-          sourceURL: ensureString(result.data[0].metadata?.sourceURL, url)
+          sourceURL: ensureString(result.data[0].metadata?.sourceURL, url),
+          author: result.data[0].metadata?.author,
+          publishDate: result.data[0].metadata?.publishDate,
+          lastModified: result.data[0].metadata?.lastModified,
+          language: result.data[0].metadata?.language || 'en',
+          contentType: result.data[0].metadata?.contentType || 'article',
+          mainHeadings: result.data[0].metadata?.mainHeadings || []
         },
         actions: []
       }]
