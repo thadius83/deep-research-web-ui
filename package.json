@@ -36,6 +36,7 @@
     "zod-to-json-schema": "^3.24.1"
   },
   "devDependencies": {
+    "@types/uuid": "^10.0.0",
     "@vueuse/core": "^12.5.0",
     "@vueuse/nuxt": "^12.5.0"
   }

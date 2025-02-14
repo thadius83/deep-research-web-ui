@@ -19,15 +19,16 @@
   const isLoading = ref(false)
   const error = ref('')
 
-  const isSubmitButtonDisabled = computed(
-    () =>
-      !feedback.value.length ||
-      // All questions should be answered
-      feedback.value.some((v) => !v.assistantQuestion || !v.userAnswer) ||
-      // Should not be loading
-      isLoading.value ||
-      props.isLoadingSearch,
-  )
+  const isSubmitButtonDisabled = computed(() => {
+    // If there are feedback items, ensure they're all answered
+    if (feedback.value.length > 0) {
+      return feedback.value.some((v) => !v.assistantQuestion || !v.userAnswer) ||
+        isLoading.value ||
+        props.isLoadingSearch;
+    }
+    // If no feedback items, only check loading states
+    return isLoading.value || props.isLoadingSearch;
+  })
 
   async function getFeedback(query: string, numQuestions = 3) {
     clear()
@@ -81,7 +82,9 @@
 
     <div class="flex flex-col gap-2">
       <p v-if="error" class="text-red-500">{{ error }}</p>
-      <div v-if="!feedback.length && !error">Waiting for model feedback...</div>
+      <div v-if="!feedback.length && !error">
+        {{ isLoading ? 'Waiting for model feedback...' : 'Ready to proceed with research' }}
+      </div>
       <template v-else>
         <div v-if="error" class="text-red-500">{{ error }}</div>
         <div
@@ -100,7 +103,7 @@
         block
         @click="$emit('submit', feedback)"
       >
-        Submit Answer
+        {{ feedback.length ? 'Submit Answer' : 'Start Research' }}
       </UButton>
     </div>
   </UCard>

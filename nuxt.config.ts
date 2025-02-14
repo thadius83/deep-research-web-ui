@@ -78,6 +78,12 @@ export default defineNuxtConfig({
     }
   },
 
+  // Static asset handling
+  app: {
+    baseURL: '/',
+    buildAssetsDir: '/_nuxt/',
+  },
+
   // Nitro server configuration
   nitro: {
     preset: 'node-server',

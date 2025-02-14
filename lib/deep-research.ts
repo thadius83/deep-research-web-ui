@@ -31,7 +31,32 @@ export interface WriteFinalReportParams {
 export type SearchQuery = z.infer<typeof searchQueriesTypeSchema>['queries'][0]
 export type PartialSearchQuery = DeepPartial<SearchQuery>
 
-type WebSearchResult = TavilySearchResponse | FirecrawlSearchResponse
+import type { FirecrawlResponse } from '~/server/utils/firecrawl-client'
+
+interface TavilyResult {
+  url: string
+  content: string
+  title: string
+  score: number
+}
+
+interface TavilyResponse {
+  results: TavilyResult[]
+}
+
+type WebSearchResult = TavilyResponse | FirecrawlResponse
+
+function isTavilyResponse(response: any): response is TavilyResponse {
+  return 'results' in response && Array.isArray(response.results)
+}
+
+function isFirecrawlResponse(response: any): response is FirecrawlResponse {
+  return 'data' in response && Array.isArray(response.data) && response.data.every((item: any) => 
+    typeof item.url === 'string' && 
+    typeof item.markdown === 'string' && 
+    (!item.metadata || typeof item.metadata === 'object')
+  )
+}
 
 interface ProcessedSearchResult {
   learnings: string[]
@@ -195,6 +220,8 @@ function childNodeId(parentNodeId: string, currentIndex: number) {
   return `${parentNodeId}-${currentIndex}`
 }
 
+import { isUrlQuery, extractUrl } from '../utils/url'
+
 export async function deepResearch({
   query,
   breadth,
@@ -215,6 +242,52 @@ export async function deepResearch({
   nodeId?: string
 }): Promise<ResearchResult> {
   try {
+    // Check if query is a URL
+    if (isUrlQuery(query)) {
+      const url = extractUrl(query)
+      if (url) {
+        logger.debug(`[Research] Direct URL scraping: ${url}`)
+        const search = useServerSearch()
+        
+        // Use scrapeUrlContent directly
+        const result = await scrapeUrlContent(url, {
+          formats: ['markdown'],
+          onlyMainContent: true,
+          waitFor: 3000,
+          removeBase64Images: true,
+          timeout: 30000
+        })
+
+        // Process just the single URL result
+        const searchResultGenerator = processSearchResult({
+          query: url,
+          result,
+          numFollowUpQuestions: 0, // No follow-up questions for direct URLs
+        })
+
+        let searchResult: PartialProcessedResult = {}
+        for await (const parsedLearnings of parseStreamingJson(
+          searchResultGenerator.textStream,
+          searchResultTypeSchema,
+          (value) => !!value.learnings?.length,
+        )) {
+          searchResult = parsedLearnings
+        }
+
+        onProgress({
+          type: 'complete',
+          learnings: searchResult.learnings || [],
+          visitedUrls: [url]
+        })
+
+        return {
+          learnings: searchResult.learnings || [],
+          visitedUrls: [url]
+        }
+      }
+    }
+
+    // Regular search process for non-URL queries
     const searchQueriesResult = generateSearchQueries({
       query,
       learnings,
@@ -268,7 +341,7 @@ export async function deepResearch({
             const search = useServerSearch()
 
             // Use server-side search endpoint
-            const result = await search.search(searchQuery.query, {
+            const searchResponse = await search.search(searchQuery.query, {
               maxResults: 5,
               limit: 5,
               timeout: 15000,
@@ -280,11 +353,34 @@ export async function deepResearch({
               },
             })
 
+            // Convert response to FirecrawlResponse format
+            const result: FirecrawlResponse = isTavilyResponse(searchResponse)
+              ? {
+                  success: true,
+                  data: searchResponse.results.map(item => ({
+                    url: item.url || '',
+                    markdown: item.content || '',
+                    metadata: {
+                      title: item.title || '',
+                      description: '',  // Tavily doesn't provide snippets
+                      sourceURL: item.url || ''
+                    },
+                    actions: []
+                  }))
+                }
+              : isFirecrawlResponse(searchResponse)
+                ? searchResponse
+                : {
+                    success: false,
+                    data: [],
+                    error: 'Invalid response format'
+                  }
+
             const newUrls = compact(
-              'results' in result
-                ? result.results.map((item) => item.url)
-                : result.data.map((item) => item.url)
-            )
+              isTavilyResponse(searchResponse)
+                ? searchResponse.results.map(item => item.url)
+                : searchResponse.data.map(item => item.url)
+            ).filter(Boolean)
 
             onProgress({
               type: 'search_complete',
