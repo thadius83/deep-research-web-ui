@@ -71,7 +71,7 @@
 </script>
 
 <template>
-  <UCard>
+  <UCard id="model-feedback">
     <template #header>
       <h2 class="font-bold">2. Model Feedback</h2>
       <p class="text-sm text-gray-500">

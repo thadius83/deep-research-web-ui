@@ -1,71 +1,92 @@
 import { DeepResearchMethod } from './methods/deep-research';
 import { ExtractInfoMethod } from './methods/extract-info';
+import { ExpertSummaryMethod } from './methods/expert-summary';
+import { BusinessIdeasMethod } from './methods/business-ideas';
+import { ExtractWisdomMethod } from './methods/extract-wisdom';
+import { ResearchPredictionsMethod } from './methods/research-predictions';
 import type { ResearchMethod } from './types';
+import { logger } from '../utils/logger';
 
 // Initialize method instances
-console.log('Initializing research methods...');
+logger.debug('Initializing research methods...');
 
 let deepResearch: ResearchMethod;
 let extractInfo: ResearchMethod | undefined;
+let expertSummary: ResearchMethod | undefined;
+let businessIdeas: ResearchMethod | undefined;
+let extractWisdom: ResearchMethod | undefined;
+let researchPredictions: ResearchMethod | undefined;
 
-try {
-  const deepResearchInstance = new DeepResearchMethod();
-  console.log('Deep Research initialized:', {
-    id: deepResearchInstance.id,
-    name: deepResearchInstance.name,
-    description: deepResearchInstance.description
-  });
-  deepResearch = deepResearchInstance;
-} catch (error) {
-  console.error('Error initializing Deep Research:', error);
-  throw new Error('Failed to initialize Deep Research method');
+function initializeMethod<T extends ResearchMethod>(
+  Method: new () => T,
+  name: string
+): T | undefined {
+  try {
+    const instance = new Method();
+    logger.debug(`${name} initialized: ${JSON.stringify({
+      id: instance.id,
+      name: instance.name,
+      description: instance.description
+    }, null, 2)}`);
+    return instance;
+  } catch (error) {
+    logger.error(`Error initializing ${name}: ${error}`);
+    return undefined;
+  }
 }
 
-try {
-  const extractInfoInstance = new ExtractInfoMethod();
-  console.log('Extract Info initialized:', {
-    id: extractInfoInstance.id,
-    name: extractInfoInstance.name,
-    description: extractInfoInstance.description
-  });
-  extractInfo = extractInfoInstance;
-} catch (error) {
-  console.error('Error initializing Extract Info:', error);
-  // Don't throw, just continue without this method
-}
+// Initialize Deep Research (required)
+const deepResearchInstance = new DeepResearchMethod();
+logger.debug(`Deep Research initialized: ${JSON.stringify({
+  id: deepResearchInstance.id,
+  name: deepResearchInstance.name,
+  description: deepResearchInstance.description
+}, null, 2)}`);
+deepResearch = deepResearchInstance;
 
-// Method registry
+// Initialize optional methods
+extractInfo = initializeMethod(ExtractInfoMethod, 'Extract Info');
+expertSummary = initializeMethod(ExpertSummaryMethod, 'Expert Summary');
+businessIdeas = initializeMethod(BusinessIdeasMethod, 'Business Ideas');
+extractWisdom = initializeMethod(ExtractWisdomMethod, 'Extract Wisdom');
+researchPredictions = initializeMethod(ResearchPredictionsMethod, 'Research Predictions');
+
+// Method registry - filter out undefined methods
 export const researchMethods: ResearchMethod[] = [
   deepResearch, // Keep deep research as first/default method
   ...(extractInfo ? [extractInfo] : []),
-];
+  ...(expertSummary ? [expertSummary] : []),
+  ...(businessIdeas ? [businessIdeas] : []),
+  ...(extractWisdom ? [extractWisdom] : []),
+  ...(researchPredictions ? [researchPredictions] : []),
+].filter((method): method is ResearchMethod => method !== undefined);
 
-console.log('Research methods initialized:', researchMethods.map(m => ({
+logger.debug(`Research methods initialized: ${JSON.stringify(researchMethods.map(m => ({
   id: m.id,
   name: m.name,
   description: m.description
-})));
+})), null, 2)}`);
 
 // Get method by ID with error handling
 export function getMethodById(id: string): ResearchMethod {
   try {
-    console.log('Getting method by ID:', id);
+    logger.debug(`Getting method by ID: ${id}`);
     const method = researchMethods.find(m => m.id === id);
     
     if (!method) {
-      console.warn('Method not found, defaulting to deep research');
+      logger.debug('Method not found, defaulting to deep research');
       return deepResearch;
     }
 
-    console.log('Found method:', {
+    logger.debug(`Found method: ${JSON.stringify({
       id: method.id,
       name: method.name,
       description: method.description
-    });
+    }, null, 2)}`);
 
     return method;
   } catch (error) {
-    console.error('Error getting method by ID:', error);
+    logger.error(`Error getting method by ID: ${error}`);
     return deepResearch;
   }
 }
@@ -74,4 +95,8 @@ export function getMethodById(id: string): ResearchMethod {
 export {
   deepResearch,
   extractInfo,
+  expertSummary,
+  businessIdeas,
+  extractWisdom,
+  researchPredictions,
 };

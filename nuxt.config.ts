@@ -1,5 +1,6 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { resolve } from 'path'
+import { eventHandler } from 'h3'
 export default defineNuxtConfig({
   runtimeConfig: {
     public: {
@@ -68,5 +69,25 @@ export default defineNuxtConfig({
   // Configure aliases
   alias: {
     'research-methods': resolve(__dirname, './research-methods')
+  },
+
+  // Router configuration
+  router: {
+    options: {
+      strict: false
+    }
+  },
+
+  // Nitro server configuration
+  nitro: {
+    preset: 'node-server',
+    logLevel: 'debug',
+    routeRules: {
+      '/_nuxt/**': {
+        headers: {
+          'cache-control': 'public, max-age=2592000'
+        }
+      }
+    }
   },
 })

@@ -62,15 +62,17 @@
   )
 
   watch([hasAiKey, hasWebSearchKey, hasFormValues], () => {
-    console.log('Form state:', {
-      hasFormValues: hasFormValues.value,
-      hasAiKey: hasAiKey.value,
-      hasWebSearchKey: hasWebSearchKey.value,
-      envAiKey: !!runtimeConfig.public.openaiKey,
-      envSearchKey: store.config.webSearch.provider === 'tavily' 
-        ? !!runtimeConfig.public.tavilyKey 
-        : !!runtimeConfig.public.firecrawlKey
-    })
+    if (process.dev) {
+      console.log('Form state:', {
+        hasFormValues: hasFormValues.value,
+        hasAiKey: hasAiKey.value,
+        hasWebSearchKey: hasWebSearchKey.value,
+        envAiKey: !!runtimeConfig.public.openaiKey,
+        envSearchKey: store.config.webSearch.provider === 'tavily' 
+          ? !!runtimeConfig.public.tavilyKey 
+          : !!runtimeConfig.public.firecrawlKey
+      })
+    }
   }, { immediate: true })
 
   function handleSubmit() {
@@ -78,6 +80,16 @@
       ...form,
       methodId: form.methodId // Ensure we get the current value
     })
+    // Scroll to feedback section after a short delay
+    setTimeout(() => {
+      const feedbackElement = document.querySelector('#model-feedback')
+      if (feedbackElement) {
+        feedbackElement.scrollIntoView({ 
+          behavior: 'smooth',
+          block: 'start'
+        })
+      }
+    }, 500)
   }
 
   defineExpose({

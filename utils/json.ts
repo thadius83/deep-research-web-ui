@@ -1,5 +1,7 @@
 import { parsePartialJson } from '@ai-sdk/ui-utils'
 import { z } from 'zod'
+import { getConfig } from '../server/utils/server-config'
+import { logger } from './logger'
 
 export type DeepPartial<T> = T extends object
   ? T extends Array<any>
@@ -33,21 +35,41 @@ export async function* parseStreamingJson<T extends z.ZodType>(
   _schema: T,
   isValid: (value: DeepPartial<z.infer<T>>) => boolean,
 ): AsyncGenerator<DeepPartial<z.infer<T>>> {
+  const config = getConfig()
   let rawText = ''
   let isParseSuccessful = false
 
+    if (config.isDev) {
+      logger.debug('[LLM Stream] Starting JSON stream parsing');
+    }
+
   for await (const chunk of textStream) {
+    if (config.isDev) {
+      logger.debug(`[LLM Stream] Received chunk: ${chunk}`);
+    }
     rawText = removeJsonMarkdown(rawText + chunk)
     const parsed = parsePartialJson(rawText)
 
     isParseSuccessful =
       parsed.state === 'repaired-parse' || parsed.state === 'successful-parse'
     if (isParseSuccessful && isValid(parsed.value as any)) {
+      if (config.isDev) {
+        logger.debug(`[LLM Stream] Valid JSON parsed: ${JSON.stringify(parsed.value, null, 2)}`);
+      }
       yield parsed.value as DeepPartial<z.infer<T>>
     } else {
+      if (config.isDev) {
+        logger.debug(`[LLM Stream] Invalid or incomplete JSON: ${JSON.stringify({
+          state: parsed.state,
+          value: parsed.value
+        }, null, 2)}`);
+      }
       console.dir(parsed, { depth: null, colors: true })
     }
   }
 
+  if (config.isDev) {
+    logger.debug(`[LLM Stream] Stream parsing complete, success: ${isParseSuccessful}`);
+  }
   return { isSuccessful: isParseSuccessful }
 }

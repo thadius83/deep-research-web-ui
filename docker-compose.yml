@@ -12,11 +12,29 @@ services:
     env_file:
       - .env
     environment:
+      # Nitro Settings
+      - NITRO_PRESET=node-server
+      - NITRO_HOST=0.0.0.0
+      - NITRO_PORT=3000
+      
       # Nuxt Settings
       - NUXT_HOST=0.0.0.0
       - NUXT_PORT=3000
-      # Override any env_file values here if needed
+      
+      # AI Provider Settings
       - OPENAI_KEY=${OPENAI_KEY:-}
+      - OPENAI_ENDPOINT=${OPENAI_ENDPOINT:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-}
+      - CONTEXT_SIZE=${CONTEXT_SIZE:-128000}
+      
+      # Web Search Provider Settings
+      - DEFAULT_SEARCH_PROVIDER=${DEFAULT_SEARCH_PROVIDER:-}
+      
+      # Tavily Settings
       - TAVILY_KEY=${TAVILY_KEY:-}
+      - TAVILY_BASE_URL=${TAVILY_BASE_URL:-}
+      
+      # Firecrawl Settings
       - FIRECRAWL_KEY=${FIRECRAWL_KEY:-}
+      - FIRECRAWL_BASE_URL=${FIRECRAWL_BASE_URL:-}
     restart: unless-stopped

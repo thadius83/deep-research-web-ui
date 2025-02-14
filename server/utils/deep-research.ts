@@ -5,6 +5,8 @@ import { parseStreamingJson, type DeepPartial } from '~/utils/json'
 import { trimPrompt } from '~/lib/ai/providers'
 import { systemPrompt } from '~/lib/prompt'
 import zodToJsonSchema from 'zod-to-json-schema'
+import { getConfig } from './server-config'
+import { logger } from '../../utils/logger'
 
 // Define a common interface for search results
 interface SearchResult {
@@ -98,6 +100,23 @@ export async function serverDeepResearch({
   prompts: ResearchPrompts;
 }): Promise<ResearchResult> {
   try {
+    const config = getConfig()
+    if (config.isDev) {
+      logger.debug(`[Research] Starting depth ${currentDepth}, node ${nodeId}`);
+      logger.debug(`[Research] Input: ${JSON.stringify({
+        query,
+        breadth,
+        maxDepth,
+        learningsCount: learnings.length,
+        urlsCount: visitedUrls.length
+      }, null, 2)}`);
+      logger.debug(`[Research] Prompts: ${JSON.stringify({
+        mainPromptLength: prompts.mainPrompt.length,
+        hasFollowUp: !!prompts.followUpTemplate,
+        hasLearning: !!prompts.learningTemplate
+      }, null, 2)}`);
+    }
+
     const schema = z.object({
       queries: z
         .array(
@@ -116,12 +135,18 @@ export async function serverDeepResearch({
 
     const prompt = prompts.mainPrompt
 
+    if (config.isDev) {
+      logger.debug('[LLM] Starting search query generation');
+      logger.debug(`[LLM] System Prompt: ${systemPrompt()}`);
+      logger.debug(`[LLM] User Prompt: ${prompt}`);
+      logger.debug(`[LLM] JSON Schema: ${jsonSchema}`);
+    }
+
     const searchQueriesResult = await clients.ai.streamText({
       prompt,
       system: systemPrompt(),
     })
 
-    const limit = pLimit(ConcurrencyLimit)
     let searchQueries: PartialSearchQuery[] = []
 
     for await (const parsedQueries of parseStreamingJson(
@@ -130,6 +155,11 @@ export async function serverDeepResearch({
       (value) => !!value.queries?.length && !!value.queries[0]?.query,
     )) {
       if (parsedQueries.queries) {
+      if (config.isDev) {
+        logger.debug(`[Research] Generated queries: ${JSON.stringify(parsedQueries.queries, null, 2)}`);
+        logger.debug('[LLM] Query generation complete');
+      }
+
         for (let i = 0; i < searchQueries.length; i++) {
           onProgress({
             type: 'generating_query',
@@ -150,14 +180,23 @@ export async function serverDeepResearch({
       })
     }
 
+    const limiter = pLimit(ConcurrencyLimit)
     const results = await Promise.all(
       searchQueries.map((searchQuery, i) =>
-        limit(async () => {
+        limiter(async () => {
           if (!searchQuery?.query)
             return {
               learnings: [],
               visitedUrls: [],
             }
+
+          if (config.isDev) {
+            logger.debug(`[Research] Processing query ${i + 1}: ${JSON.stringify({
+              query: searchQuery.query,
+              goal: searchQuery.researchGoal
+            }, null, 2)}`);
+          }
+
           onProgress({
             type: 'searching',
             query: searchQuery.query,
@@ -182,6 +221,13 @@ export async function serverDeepResearch({
                 : result.data?.map((item) => item.url) || []
             )
 
+            if (config.isDev) {
+              logger.debug(`[Research] Search results: ${JSON.stringify({
+                query: searchQuery.query,
+                urlsFound: newUrls.length
+              }, null, 2)}`);
+            }
+
             onProgress({
               type: 'search_complete',
               urls: newUrls,
@@ -193,7 +239,7 @@ export async function serverDeepResearch({
               result.results
                 ? result.results.map((item) => item.content || '')
                 : result.data?.map((item) => item.markdown || '') || []
-            ).map((content) => trimPrompt(content, 25_000))
+            ).map((content) => trimPrompt(content, 50_000))
 
             // Create context for processing search results
             const searchContext = {
@@ -203,6 +249,15 @@ export async function serverDeepResearch({
               currentDate: new Date().toISOString(),
               learnings: learnings,
             };
+
+            if (config.isDev) {
+              logger.debug(`[Research] Processing context: ${JSON.stringify({
+                query: searchContext.query,
+                resultsCount: contents.length,
+                sourcesCount: searchContext.sources.length,
+                learningsCount: searchContext.learnings.length
+              }, null, 2)}`);
+            }
 
             const processPrompt = prompts.mainPrompt
 
@@ -220,6 +275,13 @@ export async function serverDeepResearch({
               (value) => !!value.learnings?.length,
             )) {
               searchResult = parsedLearnings
+              if (config.isDev) {
+                logger.debug(`[Research] Processed results: ${JSON.stringify({
+                  learningsCount: parsedLearnings.learnings?.length || 0,
+                  questionsCount: parsedLearnings.followUpQuestions?.length || 0
+                }, null, 2)}`);
+              }
+
               onProgress({
                 type: 'processing_serach_result',
                 result: parsedLearnings,
@@ -256,6 +318,14 @@ export async function serverDeepResearch({
                 .join('')}
             `.trim()
 
+              if (config.isDev) {
+                logger.debug(`[Research] Next iteration: ${JSON.stringify({
+                  nextQuery,
+                  nextDepth,
+                  nextBreadth
+                }, null, 2)}`);
+              }
+
               return serverDeepResearch({
                 query: nextQuery,
                 breadth: nextBreadth,
@@ -269,12 +339,21 @@ export async function serverDeepResearch({
                 prompts,
               })
             } else {
+              if (config.isDev) {
+                logger.debug(`[Research] Branch complete: ${JSON.stringify({
+                  learningsCount: allLearnings.length,
+                  urlsCount: allUrls.length
+                }, null, 2)}`);
+              }
               return {
                 learnings: allLearnings,
                 visitedUrls: allUrls,
               }
             }
           } catch (e: any) {
+              if (config.isDev) {
+              logger.error(`[Research] Branch error: ${e}`);
+            }
             throw new Error(
               `Error searching for ${searchQuery.query}, depth ${currentDepth}\nMessage: ${e.message}`,
             )
@@ -283,10 +362,18 @@ export async function serverDeepResearch({
       ),
     )
 
-    const _learnings = [...new Set(results.flatMap((r) => r.learnings))]
-    const _visitedUrls = [...new Set(results.flatMap((r) => r.visitedUrls))]
+    const _learnings = [...new Set(results.flatMap((r: ResearchResult) => r.learnings))]
+    const _visitedUrls = [...new Set(results.flatMap((r: ResearchResult) => r.visitedUrls))]
 
     if (nodeId === '0') {
+      if (config.isDev) {
+        logger.debug(`[Research] Final results: ${JSON.stringify({
+          totalLearnings: _learnings.length,
+          totalUrls: _visitedUrls.length,
+          learnings: _learnings
+        }, null, 2)}`);
+      }
+
       onProgress({
         type: 'complete',
         learnings: _learnings,
@@ -299,12 +386,18 @@ export async function serverDeepResearch({
       visitedUrls: _visitedUrls,
     }
   } catch (error: any) {
-    console.error(error)
+    const config = getConfig()
+    logger.error(`[Research] Error: ${error}`);
     onProgress({
       type: 'error',
       message: error?.message ?? 'Something went wrong',
       nodeId,
     })
+
+    if (config.isDev) {
+      logger.error(`[Research] Full error details: ${JSON.stringify(error, null, 2)}`);
+    }
+
     return {
       learnings: [],
       visitedUrls: [],

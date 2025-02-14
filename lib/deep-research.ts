@@ -2,8 +2,8 @@ import { streamText } from 'ai'
 import { compact } from 'lodash-es'
 import pLimit from 'p-limit'
 import { z } from 'zod'
+import { logger } from '../utils/logger'
 import { parseStreamingJson, type DeepPartial } from '~/utils/json'
-
 import { trimPrompt } from './ai/providers'
 import { systemPrompt } from './prompt'
 import zodToJsonSchema from 'zod-to-json-schema'
@@ -12,6 +12,7 @@ import { type SearchResponse as FirecrawlSearchResponse } from '@mendable/firecr
 import { useServerSearch } from '~/composables/useServerSearch'
 import { useConfigStore } from '~/stores/config'
 import { useAiModel } from '~/composables/useAiProvider'
+import { getMethodById } from '~/research-methods'
 
 export type ResearchResult = {
   learnings: string[]
@@ -21,6 +22,9 @@ export type ResearchResult = {
 export interface WriteFinalReportParams {
   prompt: string
   learnings: string[]
+  methodId: string
+  visitedUrls: string[]
+  currentDate: string
 }
 
 // Used for streaming response
@@ -38,35 +42,16 @@ export type PartialProcessedResult = DeepPartial<ProcessedSearchResult>
 
 export type ResearchStep =
   | { type: 'generating_query'; result: PartialSearchQuery; nodeId: string }
-  | {
-      type: 'generated_query'
-      query: string
-      result: PartialSearchQuery
-      nodeId: string
-    }
+  | { type: 'generated_query'; query: string; result: PartialSearchQuery; nodeId: string }
   | { type: 'searching'; query: string; nodeId: string }
   | { type: 'search_complete'; urls: string[]; nodeId: string }
-  | {
-      type: 'processing_serach_result'
-      query: string
-      result: PartialProcessedResult
-      nodeId: string
-    }
-  | {
-      type: 'processed_search_result'
-      query: string
-      result: ProcessedSearchResult
-      nodeId: string
-    }
+  | { type: 'processing_serach_result'; query: string; result: PartialProcessedResult; nodeId: string }
+  | { type: 'processed_search_result'; query: string; result: ProcessedSearchResult; nodeId: string }
   | { type: 'error'; message: string; nodeId: string }
   | { type: 'complete'; learnings: string[]; visitedUrls: string[] }
 
-// increase this if you have higher API rate limits
 const ConcurrencyLimit = 2
 
-/**
- * Schema for {@link generateSearchQueries} without dynamic descriptions
- */
 export const searchQueriesTypeSchema = z.object({
   queries: z.array(
     z.object({
@@ -76,7 +61,12 @@ export const searchQueriesTypeSchema = z.object({
   ),
 })
 
-// take en user query, return a list of SERP queries
+export const searchResultTypeSchema = z.object({
+  learnings: z.array(z.string()),
+  followUpQuestions: z.array(z.string()),
+})
+
+// Function to generate search queries
 export function generateSearchQueries({
   query,
   numQueries = 3,
@@ -84,7 +74,6 @@ export function generateSearchQueries({
 }: {
   query: string
   numQueries?: number
-  // optional, if provided, the research will continue from the last learning
   learnings?: string[]
 }) {
   const schema = z.object({
@@ -112,6 +101,9 @@ export function generateSearchQueries({
       : '',
     `You MUST respond in JSON with the following schema: ${jsonSchema}`,
   ].join('\n\n')
+
+  logger.debug(`[Generate Search Queries] Query: ${query}, Max Queries: ${numQueries}, Previous Learnings: ${learnings?.length || 0}`);
+
   return streamText({
     model: useAiModel(),
     system: systemPrompt(),
@@ -119,11 +111,7 @@ export function generateSearchQueries({
   })
 }
 
-export const searchResultTypeSchema = z.object({
-  learnings: z.array(z.string()),
-  followUpQuestions: z.array(z.string()),
-})
-
+// Function to process search results
 function processSearchResult({
   query,
   result,
@@ -150,7 +138,8 @@ function processSearchResult({
     'results' in result
       ? result.results.map((item) => item.content)
       : result.data.map((item) => item.markdown)
-  ).map((content) => trimPrompt(content, 25_000))
+  ).map((content) => trimPrompt(content, 50_000))
+
   const prompt = [
     `Given the following contents from a SERP search for the query <query>${query}</query>, generate a list of learnings from the contents. Return a maximum of ${numLearnings} learnings, but feel free to return less if the contents are clear. Make sure each learning is unique and not similar to each other. The learnings should be concise and to the point, as detailed and information dense as possible. Make sure to include any entities like people, places, companies, products, things, etc in the learnings, as well as any exact metrics, numbers, or dates. The learnings will be used to research the topic further.`,
     `<contents>${contents
@@ -158,6 +147,8 @@ function processSearchResult({
       .join('\n')}</contents>`,
     `You MUST respond in JSON with the following schema: ${jsonSchema}`,
   ].join('\n\n')
+
+  logger.debug(`[Process Search Result] Query: ${query}, Content Count: ${contents.length}`);
 
   return streamText({
     model: useAiModel(),
@@ -170,21 +161,28 @@ function processSearchResult({
 export function writeFinalReport({
   prompt,
   learnings,
+  methodId,
+  currentDate,
 }: WriteFinalReportParams) {
+  const method = getMethodById(methodId);
   const learningsString = trimPrompt(
     learnings
       .map((learning) => `<learning>\n${learning}\n</learning>`)
       .join('\n'),
-    150_000,
+    300_000,
   )
+
   const _prompt = [
-    `Given the following prompt from the user, write a final report on the topic using the learnings from research. Make it as as detailed as possible, aim for 6 or more pages, include ALL the learnings from research:`,
+    `Given the following prompt from the user, write a final report following the specific format for this research method:`,
     `<prompt>${prompt}</prompt>`,
-    `Here are all the learnings from previous research:`,
+    `Here are all the learnings from the research:`,
     `<learnings>\n${learningsString}\n</learnings>`,
-    `Write the report in Markdown.`,
+    method.promptTemplate,
+    `Write the report in Markdown following this method's specific structure and requirements.`,
     `## Deep Research Report`,
   ].join('\n\n')
+
+  logger.debug(`[Final Report Generation] Method ID: ${methodId}, Using method template: ${method.promptTemplate}, User prompt: ${prompt}, Number of learnings: ${learnings.length}`);
 
   return streamText({
     model: useAiModel(),
@@ -317,10 +315,7 @@ export async function deepResearch({
                 nodeId: childNodeId(nodeId, i),
               })
             }
-            console.log(
-              `Processed search result for ${searchQuery.query}`,
-              searchResult,
-            )
+            logger.debug(`[Research] Processed search result for ${searchQuery.query}: ${JSON.stringify(searchResult, null, 2)}`);
             const allLearnings = [
               ...learnings,
               ...(searchResult.learnings ?? []),
@@ -342,9 +337,7 @@ export async function deepResearch({
               nextDepth < maxDepth &&
               searchResult.followUpQuestions?.length
             ) {
-              console.warn(
-                `Researching deeper, breadth: ${nextBreadth}, depth: ${nextDepth}`,
-              )
+              logger.debug(`[Research] Researching deeper, breadth: ${nextBreadth}, depth: ${nextDepth}`);
 
               const nextQuery = `
               Previous research goal: ${searchQuery.researchGoal}
@@ -393,7 +386,7 @@ export async function deepResearch({
       visitedUrls: _visitedUrls,
     }
   } catch (error: any) {
-    console.error(error)
+    logger.error(`[Research] Error: ${error}`);
     onProgress({
       type: 'error',
       message: error?.message ?? 'Something went wrong',

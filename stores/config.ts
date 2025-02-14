@@ -78,6 +78,10 @@ export const useConfigStore = defineStore('config', () => {
             : runtimeConfig.public.firecrawlKey)
             ? config.value.webSearch.apiKey 
             : serverConfig.webSearch.apiKey,
+          // Always use environment variables for base URLs if available
+          apiBase: config.value.webSearch.provider === 'tavily'
+            ? (runtimeConfig.public.tavilyBaseUrl || serverConfig.webSearch.apiBase)
+            : (runtimeConfig.public.firecrawlBaseUrl || serverConfig.webSearch.apiBase),
         },
       }
     } catch (error) {
@@ -138,10 +142,29 @@ export const useConfigStore = defineStore('config', () => {
     const oldProvider = config.value.webSearch.provider
     console.log('Updating provider:', { from: oldProvider, to: provider })
 
+    const runtimeConfig = useRuntimeConfig()
+    
     config.value.webSearch.provider = provider
-    config.value.webSearch.apiBase = provider === 'firecrawl'
-      ? 'https://api.firecrawl.dev/v1'
-      : 'https://api.tavily.com'
+    
+    // Handle API base URLs with proper fallback logic
+    if (provider === 'firecrawl') {
+      // For Firecrawl:
+      // 1. Use environment variable if set
+      // 2. Keep existing base URL if switching back to Firecrawl
+      // 3. Use default only if no other option exists
+      config.value.webSearch.apiBase = runtimeConfig.public.firecrawlBaseUrl || 
+        (oldProvider === provider ? config.value.webSearch.apiBase : null) || 
+        'https://api.firecrawl.dev/v1'
+    } else {
+      // For Tavily, always use env var or default
+      config.value.webSearch.apiBase = runtimeConfig.public.tavilyBaseUrl || 
+        'https://api.tavily.com'
+    }
+
+    // Clear API key if switching providers (for security)
+    if (oldProvider !== provider) {
+      config.value.webSearch.apiKey = undefined
+    }
 
     await saveConfig()
   }

@@ -1,92 +1,77 @@
-import { Config, ConfigAiProvider } from '~/stores/config'
-
-// In-memory store for user-provided config
-let userConfig: Partial<Config> = {}
-
-// Default configuration values
-const defaultConfig: Config = {
+export interface Config {
   ai: {
-    provider: 'openai-compatible',
-    model: 'gpt-4o',
-    apiBase: 'https://api.openai.com/v1',
-    contextSize: 128000,
-  },
+    apiKey: string
+    apiBase: string
+    model: string
+    contextSize: number
+  }
   webSearch: {
-    provider: 'firecrawl',
-    apiBase: 'https://api.firecrawl.dev/v1',
-  },
+    provider: 'tavily' | 'firecrawl'
+    apiKey: string
+    apiBase: string
+  }
+  isDev: boolean
 }
 
-/**
- * Get effective configuration by merging:
- * 1. User-provided config (highest priority)
- * 2. Environment variables (initial defaults)
- * 3. Default values (fallback)
- */
-export function getEffectiveConfig(): Config {
-  const runtimeConfig = useRuntimeConfig()
-
-  // Start with environment variables as initial values
-  const envConfig = {
-    ai: {
-      provider: 'openai-compatible' as ConfigAiProvider,
-      apiKey: runtimeConfig.public.openaiKey,
-      apiBase: runtimeConfig.public.openaiEndpoint,
-      model: runtimeConfig.public.openaiModel,
-      contextSize: Number(runtimeConfig.public.contextSize),
-    },
-    webSearch: {
-      provider: runtimeConfig.public.defaultSearchProvider as 'tavily' | 'firecrawl' || defaultConfig.webSearch.provider,
-      apiKey: runtimeConfig.public.defaultSearchProvider === 'tavily'
-        ? runtimeConfig.public.tavilyKey
-        : runtimeConfig.public.firecrawlKey,
-      apiBase: runtimeConfig.public.defaultSearchProvider === 'tavily'
-        ? (runtimeConfig.public.tavilyBaseUrl || 'https://api.tavily.com')
-        : (runtimeConfig.public.firecrawlBaseUrl || 'http://10.0.0.145:3002/v1'),
-    },
-  }
-
-  // Merge in this order: defaults < env vars < user config
-  const config = {
-    ai: {
-      ...defaultConfig.ai,
-      ...envConfig.ai,
-      ...userConfig.ai,
-      // Always keep provider as openai-compatible for now
-      provider: 'openai-compatible' as ConfigAiProvider,
-    },
-    webSearch: {
-      ...defaultConfig.webSearch,
-      ...envConfig.webSearch,
-      ...userConfig.webSearch,
-    },
-  }
-
-  // Ensure Firecrawl base URL includes /v1
-  if (config.webSearch.provider === 'firecrawl' && config.webSearch.apiBase) {
-    config.webSearch.apiBase = config.webSearch.apiBase
-      .replace(/\/$/, '')  // Remove trailing slash
-      .replace(/\/v1$/, '') // Remove /v1 if it exists
-      + '/v1'  // Add /v1
-  }
-
-  return config
-}
-
-/**
- * Update user-provided configuration
- */
-export function updateConfig(newConfig: Partial<Config>) {
-  userConfig = {
-    ...userConfig,
-    ...newConfig,
-  }
-  return getEffectiveConfig()
-}
-
-/**
- * Get current configuration state
- */
 export function getConfig(): Config {
-  return getEffectiveConfig()
+  // Log development mode status
+  console.log('[Config] Development mode:', process.dev)
+  console.log('[Config] NODE_ENV:', process.env.NODE_ENV)
+
+  return {
+    ai: {
+      apiKey: process.env.OPENAI_KEY || '',
+      apiBase: process.env.OPENAI_ENDPOINT || 'https://api.openai.com/v1',
+      model: process.env.OPENAI_MODEL || 'gpt-4o',
+      contextSize: parseInt(process.env.CONTEXT_SIZE || '256000', 10),
+    },
+    webSearch: {
+      provider: (process.env.DEFAULT_SEARCH_PROVIDER || 'firecrawl') as 'tavily' | 'firecrawl',
+      apiKey: process.env.DEFAULT_SEARCH_PROVIDER === 'tavily' 
+        ? process.env.TAVILY_KEY || ''
+        : process.env.FIRECRAWL_KEY || '',
+      // Always respect provider-specific base URLs regardless of current provider
+      apiBase: process.env.FIRECRAWL_BASE_URL || 'https://api.firecrawl.dev/v1',
+    },
+    isDev: process.dev || process.env.NODE_ENV === 'development'
+  }
+}
+
+export function updateConfig(updates: Partial<Config>): Config {
+  if (process.dev) {
+    console.log('[Config] Updating configuration:', updates);
+  }
+
+  // Update environment variables with new values
+  if (updates.ai) {
+    if (updates.ai.apiKey) process.env.OPENAI_KEY = updates.ai.apiKey
+    if (updates.ai.apiBase) process.env.OPENAI_ENDPOINT = updates.ai.apiBase
+    if (updates.ai.model) process.env.OPENAI_MODEL = updates.ai.model
+    if (updates.ai.contextSize) process.env.CONTEXT_SIZE = updates.ai.contextSize.toString()
+  }
+
+  if (updates.webSearch) {
+    if (updates.webSearch.provider) process.env.DEFAULT_SEARCH_PROVIDER = updates.webSearch.provider
+    if (updates.webSearch.apiKey) {
+      if (updates.webSearch.provider === 'tavily') {
+        process.env.TAVILY_KEY = updates.webSearch.apiKey
+      } else {
+        process.env.FIRECRAWL_KEY = updates.webSearch.apiKey
+      }
+    }
+    if (updates.webSearch.apiBase) {
+      if (updates.webSearch.provider === 'tavily') {
+        process.env.TAVILY_BASE_URL = updates.webSearch.apiBase
+      } else {
+        process.env.FIRECRAWL_BASE_URL = updates.webSearch.apiBase
+      }
+    }
+  }
+
+  if (process.dev) {
+    console.log('[Config] Configuration updated');
+  }
+
+  // Return updated config
+  return getConfig()
 }

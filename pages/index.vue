@@ -58,7 +58,6 @@
 
   const feedback = ref<ResearchFeedbackResult[]>([])
   const researchResult = ref<ResearchResult>()
-
   function getCombinedQuery() {
     return `Initial Query: ${formRef.value?.form.query}
 Follow-up Questions and Answers:
@@ -93,6 +92,8 @@ ${feedback.value
       prompt: getCombinedQuery(),
       learnings: researchResult.value?.learnings ?? [],
       visitedUrls: researchResult.value?.visitedUrls ?? [],
+      methodId: formRef.value?.form.methodId ?? 'research-predictions',
+      currentDate: new Date().toISOString()
     })
   }
 </script>

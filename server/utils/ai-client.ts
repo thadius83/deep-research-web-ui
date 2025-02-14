@@ -1,4 +1,5 @@
 import { getConfig } from './server-config'
+import { logger } from '../../utils/logger'
 
 interface StreamTextOptions {
   prompt: string
@@ -25,6 +26,14 @@ export function useAiClient() {
       }
       messages.push({ role: 'user', content: prompt })
 
+      if (config.isDev) {
+        logger.debug(`[LLM] Model: ${model || config.ai.model}`);
+        if (system) {
+          logger.debug(`[LLM] System Prompt: ${system}`);
+        }
+        logger.debug(`[LLM] User Prompt: ${prompt}`);
+      }
+
       const response = await fetch(`${config.ai.apiBase}/chat/completions`, {
         method: 'POST',
         headers: {
@@ -50,6 +59,8 @@ export function useAiClient() {
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
 
+      let fullResponse = '';
+
       const textStream = async function* () {
         let buffer = ''
         while (true) {
@@ -67,12 +78,21 @@ export function useAiClient() {
               try {
                 const json = JSON.parse(data)
                 const content = json.choices?.[0]?.delta?.content
-                if (content) yield content
+                if (content) {
+                  fullResponse += content;
+                  yield content;
+                }
               } catch (e) {
-                console.warn('Error parsing SSE message:', e)
+                if (config.isDev) {
+                  logger.error(`[LLM] Error parsing SSE message: ${e}`);
+                }
               }
             }
           }
+        }
+
+        if (config.isDev && fullResponse) {
+          logger.debug(`[LLM] Response: ${fullResponse}`);
         }
       }
 
@@ -81,6 +101,10 @@ export function useAiClient() {
 
     async listModels(): Promise<{ id: string; object: string }[]> {
       try {
+        if (config.isDev) {
+          logger.debug('[LLM] Fetching available models');
+        }
+
         const response = await fetch(`${config.ai.apiBase}/models`, {
           headers: {
             'Authorization': `Bearer ${config.ai.apiKey}`,
@@ -93,6 +117,10 @@ export function useAiClient() {
 
         const result = await response.json()
         
+        if (config.isDev) {
+          logger.debug(`[LLM] Available models: ${JSON.stringify(result, null, 2)}`);
+        }
+
         if ('data' in result && Array.isArray(result.data)) {
           return result.data
         } else if ('id' in result) {
@@ -100,7 +128,10 @@ export function useAiClient() {
         }
         return [{ id: config.ai.model, object: 'model' }]
       } catch (error) {
-        console.error('Error fetching models:', error)
+        logger.error(`[LLM] Error fetching models: ${error}`);
+        if (config.isDev) {
+          logger.error(`[LLM] Full error details: ${JSON.stringify(error, null, 2)}`);
+        }
         return [{ id: config.ai.model, object: 'model' }]
       }
     }

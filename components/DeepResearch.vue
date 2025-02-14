@@ -20,6 +20,22 @@
   const searchResults = ref<Record<string, PartialSearchResult>>({})
   const isLoading = ref(false)
 
+  // Scroll to first query without selecting it
+  function scrollToFirstQuery() {
+    if (tree.value.children.length > 0) {
+      const firstNode = tree.value.children[0]
+      nextTick(() => {
+        const element = document.querySelector(`[data-node-id="${firstNode.id}"]`)
+        if (element) {
+          element.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+          })
+        }
+      })
+    }
+  }
+
   function handleResearchProgress(step: ResearchStep) {
     let node: TreeNode | null = null
     let nodeId = ''
@@ -35,7 +51,7 @@
     switch (step.type) {
       case 'generating_query': {
         if (!node) {
-          // 创建新节点
+          // Create new node
           node = {
             id: nodeId,
             label: 'Generating...',
@@ -44,11 +60,15 @@
             children: [],
           }
           const parentNodeId = getParentNodeId(nodeId)
-          // 如果是根节点的直接子节点
+          // If direct child of root node
           if (parentNodeId === '0') {
             tree.value.children.push(node)
+            // If this is the first query (0-0), scroll to it
+            if (nodeId === '0-0') {
+              scrollToFirstQuery()
+            }
           } else {
-            // 找到父节点并添加
+            // Find parent node and add
             const parentNode = findNode(
               tree.value,
               getParentNodeId(step.nodeId),
@@ -58,7 +78,7 @@
             }
           }
         }
-        // 更新节点的查询内容
+        // Update node query content
         if (step.result) {
           node.label = step.result.query ?? 'Generating...'
           node.researchGoal = step.result.researchGoal
@@ -108,7 +128,7 @@
     }
   }
 
-  // 辅助函数：根据节点ID查找节点
+  // Helper function: Find node by ID
   function findNode(root: TreeNode, targetId: string): TreeNode | null {
     if (!targetId) return null
     if (root.id === targetId) {
@@ -131,7 +151,7 @@
     }
   }
 
-  // 辅助函数：获取节点的父节点 ID
+  // Helper function: Get parent node ID
   function getParentNodeId(nodeId: string): string {
     const parts = nodeId.split('-')
     parts.pop()
@@ -164,7 +184,7 @@
 </script>
 
 <template>
-  <UCard>
+  <UCard id="research-tree">
     <template #header>
       <h2 class="font-bold">3. Web Browsing</h2>
       <p class="text-sm text-gray-500">
