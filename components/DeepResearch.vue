@@ -7,6 +7,7 @@
   } from '~/lib/deep-research'
   import type { TreeNode } from './Tree.vue'
   import { ref, nextTick, watch, computed } from 'vue'
+  import { ContentType } from '~/research-methods/methods/extract-info'
 
   const emit = defineEmits<{
     (e: 'complete', results: ResearchResult): void
@@ -20,6 +21,43 @@
   const selectedNode = ref<TreeNode>()
   const searchResults = ref<Record<string, PartialSearchResult>>({})
   const isLoading = ref(false)
+
+  // Helper function to get icon for content type
+  function getContentTypeIcon(type: ContentType): string {
+    switch (type) {
+      case ContentType.Technical:
+        return 'i-lucide-code-2'
+      case ContentType.Analysis:
+        return 'i-lucide-book-open'
+      case ContentType.Tutorial:
+        return 'i-lucide-graduation-cap'
+      case ContentType.Documentation:
+        return 'i-lucide-file-text'
+      case ContentType.Academic:
+        return 'i-lucide-scroll'
+      case ContentType.Discussion:
+        return 'i-lucide-message-circle'
+      case ContentType.News:
+        return 'i-lucide-newspaper'
+      case ContentType.Review:
+        return 'i-lucide-star'
+      case ContentType.Opinion:
+        return 'i-lucide-quote'
+      case ContentType.Reference:
+        return 'i-lucide-book'
+      case ContentType.Marketing:
+        return 'i-lucide-megaphone'
+      case ContentType.Educational:
+        return 'i-lucide-school'
+      default:
+        return 'i-lucide-file'
+    }
+  }
+
+  // Helper function to get title for content type
+  function getContentTypeTitle(type: ContentType): string {
+    return type.charAt(0).toUpperCase() + type.slice(1) + ' Content'
+  }
 
   // Computed property to safely parse JSON
   const parsedClassification = computed(() => {
@@ -244,7 +282,10 @@
         
         <!-- Classification details -->
         <template v-if="selectedNode.classification">
-          <h2 class="text-xl font-bold mt-2">{{ selectedNode.classification.type === 'technical' ? 'Technical Analysis' : 'Content Analysis' }}</h2>
+          <h2 class="text-xl font-bold mt-2">
+            <UIcon :name="getContentTypeIcon(selectedNode.classification.type)" class="inline-block mr-2" />
+            {{ getContentTypeTitle(selectedNode.classification.type) }}
+          </h2>
           
           <!-- Format the classification details as text -->
           <div class="mt-4 space-y-2">
@@ -272,8 +313,11 @@
             <div class="mt-4">
               <span class="font-semibold">Content Distribution:</span>
               <div class="ml-4 mt-1">
-                <div>Technical: {{ parsedClassification?.secondaryTypes?.technical }}%</div>
-                <div>Analysis: {{ parsedClassification?.secondaryTypes?.analysis }}%</div>
+                <template v-if="parsedClassification?.secondaryTypes">
+                  <div v-for="(confidence, type) in parsedClassification.secondaryTypes" :key="type">
+                    {{ type }}: {{ confidence }}%
+                  </div>
+                </template>
               </div>
             </div>
           </div>

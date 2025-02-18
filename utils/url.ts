@@ -21,24 +21,17 @@ function validateUrl(urlStr: string): string | null {
     const url = new URL(urlStr)
     // Only allow http/https protocols
     if (url.protocol === 'http:' || url.protocol === 'https:') {
-      // Additional validation: require at least one dot in hostname
-      // This prevents things like "artificial" becoming "https://artificial/"
-      if (url.hostname.includes('.')) {
-        return url.toString()
-      }
+      return url.toString()
     }
   } catch {
     // Not a valid URL
   }
 
-  // Try adding https:// if no protocol and contains a dot
-  if (!urlStr.includes('://') && urlStr.includes('.')) {
+  // Try adding https:// if no protocol
+  if (!urlStr.includes('://')) {
     try {
       const url = new URL('https://' + urlStr)
-      // Additional validation: require at least one dot in hostname
-      if (url.hostname.includes('.')) {
-        return url.toString()
-      }
+      return url.toString()
     } catch {
       // Not a valid URL
     }
@@ -53,22 +46,44 @@ function validateUrl(urlStr: string): string | null {
  * @returns Array of extracted URLs
  */
 export function extractUrls(query: string): string[] {
-  // Split query by common delimiters
-  const parts = query.split(/[\n,\s]+/)
-  
-  // Extract and validate URLs
-  const urls = parts
-    .map(part => validateUrl(part))
-    .filter((url): url is string => url !== null)
+  // Log the input query
+  console.log('Extracting URLs from query:', query)
 
-  return [...new Set(urls)] // Remove duplicates
+  // First try to find URLs using a pattern
+  // Match URLs that might be in parentheses
+  const urlPattern = /(?:\()?https?:\/\/[^\s"'<>)\]}]+(?:[^\s"'<>)\]}]|\([^\s"'<>)\]}]*\))*(?:[?#][^\s"'<>)\]}]+)?[.,]?/g
+  const matches = query.match(urlPattern)
+  console.log('URL pattern matches:', matches)
+
+  if (matches) {
+    // Extract and validate URLs
+    const urls = matches
+      .map(match => {
+        // Remove any leading parenthesis
+        // Remove leading parenthesis and trailing punctuation
+        let cleanMatch = match.startsWith('(') ? match.substring(1) : match
+        cleanMatch = cleanMatch.replace(/[.,]$/, '')
+        const url = validateUrl(cleanMatch)
+        console.log('Validating match:', { match, cleanMatch, url })
+        return url
+      })
+      .filter((url): url is string => url !== null)
+
+    const uniqueUrls = [...new Set(urls)] // Remove duplicates
+    console.log('Extracted URLs:', uniqueUrls)
+    return uniqueUrls
+  }
+
+  // Fallback: Try validating the entire query
+  const url = validateUrl(query)
+  console.log('Fallback validation:', { query, url })
+  return url ? [url] : []
 }
 
 /**
  * Extracts a single URL from a query string
  * @param query The query string that may contain a URL
  * @returns The extracted URL if found, null otherwise
- * @deprecated Use extractUrls instead for better multi-URL support
  */
 export function extractUrl(query: string): string | null {
   const urls = extractUrls(query)

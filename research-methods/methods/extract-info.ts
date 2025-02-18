@@ -21,8 +21,18 @@ export interface ContentMetadata {
 }
 
 export enum ContentType {
-  Technical = 'technical',
-  Analysis = 'analysis'
+  Technical = 'technical',           // Code, APIs, implementation details
+  Analysis = 'analysis',            // General analysis and research
+  Tutorial = 'tutorial',            // Step-by-step guides
+  Documentation = 'documentation',   // Official docs and references
+  Academic = 'academic',            // Research papers, scholarly articles
+  Discussion = 'discussion',        // Forums, Q&A, debates
+  News = 'news',                    // News articles, updates
+  Review = 'review',                // Product/service reviews
+  Opinion = 'opinion',              // Blog posts, editorials
+  Reference = 'reference',          // Encyclopedic content
+  Marketing = 'marketing',          // Product/service marketing
+  Educational = 'educational'       // Learning resources
 }
 
 export interface ClassificationResult {
@@ -158,7 +168,17 @@ export class ExtractInfoMethod extends BaseResearchMethod {
     
     Analyze the content and classify it into one of these types:
     - Technical: Code, APIs, software, technical documentation, implementation details
-    - Analysis: General analysis, reports, reviews, research, guides, educational content
+    - Analysis: General analysis and research findings
+    - Tutorial: Step-by-step guides and how-to content
+    - Documentation: Official documentation and reference materials
+    - Academic: Research papers, scholarly articles, and academic publications
+    - Discussion: Forums, Q&A, community discussions, and debates
+    - News: News articles, updates, and current events
+    - Review: Product reviews, service evaluations, and comparisons
+    - Opinion: Blog posts, editorials, and personal viewpoints
+    - Reference: Encyclopedic content and general reference materials
+    - Marketing: Product marketing, promotional content
+    - Educational: Learning resources and educational materials
     
     Provide your classification in this format:
     
