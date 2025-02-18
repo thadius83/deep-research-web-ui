@@ -11,13 +11,11 @@ import type { ResearchContext } from '~/research-methods/types'
 import { parseStreamingJson, type DeepPartial } from '~/utils/json'
 import { trimPrompt } from './ai/providers'
 import { systemPrompt } from './prompt'
-import { useServerSearch } from '~/composables/useServerSearch'
-import { useConfigStore } from '~/stores/config'
 import { useAiModel } from '~/composables/useAiProvider'
 import { getMethodById } from '~/research-methods'
 import { ExtractInfoMethod } from '~/research-methods/methods/extract-info'
 import { isUrlQuery, extractUrls, isMultiUrlQuery } from '~/utils/url'
-import { scrapeUrlContent } from '~/server/utils/url-scraper'
+import { useServerSearch } from '~/composables/useServerSearch'
 
 export type ResearchResult = {
   learnings: string[]
@@ -78,7 +76,7 @@ export type ResearchStep =
       query: string; 
       nodeId: string;
       classification: {
-        type: 'technical' | 'analysis';
+        type: ContentType;
         confidence: 'high' | 'medium' | 'low';
         metadata: {
           contentType?: string;
@@ -277,12 +275,11 @@ export async function deepResearch({
       const urls = extractUrls(query)
       if (urls.length > 0) {
         logger.debug(`[Research] Direct URL scraping: ${urls.join(', ')}`)
+        // Use server search endpoint for scraping
         const search = useServerSearch()
-        
-        // Scrape all URLs in parallel
         const scrapeResults = await Promise.all(
           urls.map(url => 
-            scrapeUrlContent(url, {
+            search.scrape(url, {
               formats: ['markdown'],
               onlyMainContent: true,
               waitFor: 3000,
@@ -296,11 +293,17 @@ export async function deepResearch({
         const combinedResult: FirecrawlResponse = {
           success: true,
           data: scrapeResults.flatMap(result => result.data.map(item => ({
-            ...item,
+            url: item.url || '',
+            markdown: item.markdown || '',
             metadata: {
               ...item.metadata,
-              sourceURL: item.url // Ensure sourceURL is set for metadata tracking
-            }
+              sourceURL: item.url || '', // Ensure sourceURL is set for metadata tracking
+              title: item.metadata?.title || '',
+              description: item.metadata?.description || '',
+              language: item.metadata?.language || 'en',
+              contentType: item.metadata?.contentType || 'article'
+            },
+            actions: []
           })))
         }
 
@@ -411,12 +414,10 @@ export async function deepResearch({
             nodeId: childNodeId(nodeId, i),
           })
           try {
-            const config = useConfigStore()
             const search = useServerSearch()
 
-            // Use server-side search endpoint
+            // Use server search endpoint
             const searchResponse = await search.search(searchQuery.query, {
-              maxResults: 5,
               limit: 5,
               timeout: 15000,
               scrapeOptions: { 

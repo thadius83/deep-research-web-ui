@@ -29,12 +29,19 @@
       for await (const chunk of textStream) {
         reportContent.value += chunk
       }
-      reportContent.value += `\n\n## Sources\n\n${params.visitedUrls
-        .map(
-          (url) =>
-            `- <a href="${url}" style="color:blue; text-decoration:underline;">${url}</a>`
-        )
-        .join('\n')}`
+      // Build source list with any available metadata
+      const sourceList = params.visitedUrls.map(url => {
+        const metadata = params.sources?.find(s => s.url === url)?.metadata
+        if (metadata) {
+          return `- <a href="${url}" style="color:blue; text-decoration:underline;">${metadata.title || url}</a>
+             ${metadata.contentType ? `\n  Type: ${metadata.contentType}` : ''}
+             ${metadata.publishDate ? `\n  Published: ${metadata.publishDate}` : ''}
+             ${metadata.author ? `\n  Author: ${metadata.author}` : ''}`
+        }
+        return `- <a href="${url}" style="color:blue; text-decoration:underline;">${url}</a>`
+      }).join('\n\n')
+
+      reportContent.value += `\n\n## Referenced Sources\n\nThe following sources were consulted in this research:\n\n${sourceList}`
     } catch (e: any) {
       console.error(`Generate report failed`, e)
       error.value = e.message

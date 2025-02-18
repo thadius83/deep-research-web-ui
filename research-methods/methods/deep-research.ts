@@ -166,14 +166,20 @@ export class DeepResearchMethod extends BaseResearchMethod {
     - Supporting charts and tables
 
     ### Source Citations
-    Provide comprehensive source documentation:
-    
-    [Write paragraphs evaluating source quality and relevance]
-    
-    Key Points:
-    - Detailed source references
-    - Expert quotations
-    - Supporting documentation
+    [IMPORTANT: Only include this section if source metadata (authors, dates, types) is available. If no metadata is available, omit this section entirely and proceed to the next section.]
+
+    [If metadata exists, analyze the quality and relevance of key sources:]
+    - Source: [URL]
+    - Type: [Content Type]
+    - Published: [Date if available]
+    - Author/Organization: [If available]
+    - Relevance: [Why this source is significant]
+    - Quality Assessment: [Based on metadata like publication type, author authority]
+
+    [If metadata exists, summarize key points:]
+    - Quality assessment of primary sources
+    - Authority and credibility analysis
+    - Source diversity and coverage
 
     Guidelines:
     - Each section should begin with detailed paragraphs providing thorough analysis
